@@ -1,0 +1,275 @@
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #0b141a;
+  border-top: 1px solid #202c33;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px 0;
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.nav-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+  color: #8696a0;
+}
+
+.nav-tab:hover {
+  color: #005c4b;
+}
+
+.nav-tab.active {
+  color: #005c4b;
+}
+
+.nav-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  transition: transform 0.2s ease;
+}
+
+.nav-tab.active .nav-icon {
+  transform: scale(1.1);
+}
+
+.nav-tab[data-has-wishlist="true"] .nav-icon {
+  color: #ff6b6b;
+  filter: drop-shadow(0 0 4px rgba(255, 107, 107, 0.4));
+}
+
+.nav-tab[data-has-messages="true"] .nav-icon {
+  color: #ff6b6b;
+  filter: drop-shadow(0 0 4px rgba(255, 107, 107, 0.4));
+}
+
+.nav-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1;
+}
+
+.chat-icon-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wishlist-icon-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cart-icon-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wishlist-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff6b6b;
+  color: white;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  padding: 0 4px;
+  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3);
+  animation: wishlistPulse 0.3s ease-out;
+}
+
+@keyframes wishlistPulse {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.cart-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #00a884;
+  color: white;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  padding: 0 4px;
+  box-shadow: 0 2px 4px rgba(0, 168, 132, 0.3);
+  animation: cartPulse 0.3s ease-out;
+  z-index: 2;
+}
+
+@keyframes cartPulse {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.chat-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff6b6b;
+  color: white;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  padding: 0 4px;
+  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3);
+  animation: chatPulse 0.3s ease-out;
+  z-index: 2;
+}
+
+@keyframes chatPulse {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.typing-indicator-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #005c4b;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pulse 2s infinite;
+  z-index: 1;
+}
+
+.typing-dot {
+  width: 4px;
+  height: 4px;
+  background: white;
+  border-radius: 50%;
+  animation: typingPulse 1.4s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 92, 75, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(0, 92, 75, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 92, 75, 0);
+  }
+}
+
+@keyframes typingPulse {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .bottom-nav {
+    padding: 6px 0;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+  
+  .nav-tab {
+    padding: 6px 8px;
+    min-width: 50px;
+  }
+  
+  .nav-icon {
+    width: 22px;
+    height: 22px;
+  }
+  
+  .nav-label {
+    font-size: 11px;
+  }
+  
+  .wishlist-badge {
+    min-width: 16px;
+    height: 16px;
+    font-size: 9px;
+    top: -3px;
+    right: -3px;
+  }
+  
+  .chat-badge {
+    min-width: 16px;
+    height: 16px;
+    font-size: 9px;
+    top: -3px;
+    right: -3px;
+  }
+}
+
+ 
