@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, orderBy, query, onSnapshot, doc, getDoc, addDoc, setDoc, deleteDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
+import { collection, orderBy, query, onSnapshot, doc, getDoc, addDoc, deleteDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase/config';
 import Login from './components/Auth/Login';
 // import Navbar from './components/Navigation/Navbar';
@@ -63,7 +63,7 @@ function App() {
   });
 
   const [gifts, setGifts] = useState([]);
-  const [userProfile, setUserProfile] = useState(null);
+  // const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
     // Check for existing user session in localStorage
@@ -179,7 +179,7 @@ function App() {
         });
       }
     }
-  }, [gifts, user?.phoneNumber]); // Removed cart dependency to prevent infinite loop
+  }, [gifts, user?.phoneNumber, cart]); // Added cart dependency
 
   // Remove cart gifts that are no longer present in Firestore gifts
   useEffect(() => {
@@ -233,8 +233,8 @@ function App() {
       try {
         const userDoc = await getDoc(doc(db, 'users', user.phoneNumber));
         if (userDoc.exists()) {
-          const profileData = userDoc.data();
-          setUserProfile(profileData);
+                  // const profileData = userDoc.data();
+        // setUserProfile(profileData);
         }
       } catch (error) {
         console.error("Error fetching user profile:", error);
@@ -281,7 +281,7 @@ function App() {
   }, [user?.phoneNumber]);
 
   // Function to handle grouped notifications
-  const handleGroupedNotification = async (newMessage) => {
+  const handleGroupedNotification = React.useCallback(async (newMessage) => {
     const senderPhoneNumber = newMessage.phoneNumber;
     
     // Handle recommendation messages separately - they get special notifications
@@ -503,7 +503,7 @@ function App() {
     } catch (error) {
       console.error("Error handling notification:", error);
     }
-  };
+  }, [user?.phoneNumber, groupedNotifications, notificationTimeouts]);
 
   // Set up messages subscription once when user is available
   useEffect(() => {
@@ -539,7 +539,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [user, currentPage]);
+  }, [user, currentPage, handleGroupedNotification]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -560,7 +560,7 @@ function App() {
       if (doc.exists()) {
         const data = doc.data();
         const typing = [];
-        let newTypingUser = null;
+        // let newTypingUser = null;
         
         Object.entries(data).forEach(([phoneNumber, userData]) => {
           if (phoneNumber !== user.phoneNumber && userData?.isTyping) {
@@ -577,7 +577,7 @@ function App() {
               
               // Check if this is a new typing indicator (within last 1 second)
               if (timeDiff < 1) {
-                newTypingUser = userData.name || phoneNumber;
+                // newTypingUser = userData.name || phoneNumber;
               }
             }
           }

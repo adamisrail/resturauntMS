@@ -66,7 +66,7 @@ const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLog
     if (messages.length > 0) {
       fetchUserProfiles();
     }
-  }, [fetchUserProfiles]);
+  }, [fetchUserProfiles, messages.length]);
 
   // Removed welcome notification - only show notifications for messages from other users
 
@@ -305,6 +305,24 @@ const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLog
         </div>
         <div className="chat-title">
           <h2>Chat Room</h2>
+          {/* Typing Indicator - Positioned in header below title */}
+          {typingUsers.length > 0 && (
+            <div className="typing-indicator">
+              <div className="typing-content">
+                <div className="typing-text">
+                  {typingUsers.length === 1 
+                    ? `${typingUsers[0].name} is typing`
+                    : `${typingUsers.length} people are typing`
+                  }
+                </div>
+                <div className="typing-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <Profile user={user} onLogout={onLogout} />
       </div>
@@ -335,35 +353,6 @@ const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLog
         <div ref={messagesEndRef} />
       </div>
       
-      {/* Typing Indicator - Positioned above message form */}
-      {typingUsers.length > 0 && (
-        <div className="typing-indicator">
-          <div className="typing-avatar">
-            <div 
-              className="typing-avatar-bg"
-              style={{ backgroundColor: generateRainbowAvatar(typingUsers[0].name) }}
-            >
-              <span className="typing-avatar-initials">
-                {getInitials(typingUsers[0].name)}
-              </span>
-            </div>
-          </div>
-          <div className="typing-content">
-            <div className="typing-text">
-              {typingUsers.length === 1 
-                ? `${typingUsers[0].name} is typing...`
-                : `${typingUsers.length} people are typing...`
-              }
-            </div>
-            <div className="typing-dots">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </div>
-        </div>
-      )}
-      
       <form onSubmit={sendMessage} className="message-form">
         <input
           type="text"
@@ -376,7 +365,7 @@ const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLog
           className="message-input"
         />
         <button type="submit" className="send-button">
-          Send
+          ➤
         </button>
       </form>
     </div>

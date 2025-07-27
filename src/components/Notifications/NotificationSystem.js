@@ -45,7 +45,21 @@ const NotificationSystem = () => {
 
     // Set timeout
     if (duration > 0) {
-      const timeoutId = setTimeout(() => removeNotification(id), duration);
+      const timeoutId = setTimeout(() => {
+        const timeoutId = timeoutsRef.current.get(id);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutsRef.current.delete(id);
+        }
+
+        setNotifications(prev => {
+          const updated = prev.filter(n => n.id !== id);
+          if (updated.length === 0) {
+            setIsVisible(false);
+          }
+          return updated;
+        });
+      }, duration);
       timeoutsRef.current.set(id, timeoutId);
     }
   }, []);
@@ -133,9 +147,10 @@ const NotificationSystem = () => {
 
   // Cleanup on unmount
   useEffect(() => {
+    const timeouts = timeoutsRef.current;
     return () => {
-      timeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
-      timeoutsRef.current.clear();
+      timeouts.forEach(timeoutId => clearTimeout(timeoutId));
+      timeouts.clear();
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
       }

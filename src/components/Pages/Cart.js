@@ -4,7 +4,7 @@ import './Pages.css';
 import './Cart.css';
 
 const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearCart }) => {
-  const [giftAmount, setGiftAmount] = useState(0);
+  const [giftAmount] = useState(0);
   const [discountCode, setDiscountCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(0);
   const [calculationsExpanded, setCalculationsExpanded] = useState(false);

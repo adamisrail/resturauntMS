@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import Profile from '../Navigation/Profile';
@@ -22,12 +22,12 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   const [chatParticipants, setChatParticipants] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
 
-  const categories = [
+  const categories = React.useMemo(() => [
     { id: 'main-course', name: 'Main Course', icon: '🍽️' },
     { id: 'appetizers', name: 'Appetizers', icon: '🥗' },
     { id: 'drinks', name: 'Drinks', icon: '🥤' },
     { id: 'desserts', name: 'Desserts', icon: '🍰' }
-  ];
+  ], []);
 
   const sortOptions = [
     { value: 'relevancy', label: 'Relevancy' },

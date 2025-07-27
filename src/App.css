@@ -4,6 +4,15 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Prevent viewport issues on mobile */
+  height: 100%;
+  overflow-x: hidden;
+  /* Prevent zoom on input focus */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+}
+
 body {
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -12,6 +21,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #0b141a;
   color: #e9edef;
+  /* Mobile viewport fixes */
+  height: 100%;
+  overflow-x: hidden;
+  /* Prevent pull-to-refresh on mobile */
+  overscroll-behavior: none;
+  /* Prevent viewport issues */
+  position: relative;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -23,6 +39,12 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Mobile specific fixes */
+  position: relative;
+  /* Prevent viewport issues */
+  -webkit-overflow-scrolling: touch;
+  /* iOS Chrome specific height */
+  height: calc(100vh - env(safe-area-inset-bottom, 0));
 }
 
 .main-content {
@@ -30,6 +52,12 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Ensure content doesn't interfere with fixed nav */
+  padding-bottom: 80px; /* Height of bottom nav */
+  /* Ensure proper height for all pages */
+  height: 100%;
+  /* iOS Chrome specific padding */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
 }
 
 .app-loading {
@@ -79,10 +107,59 @@ h1, h2, h3, h4, h5, h6 {
   padding: 20px;
 }
 
+/* iOS Chrome specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .App {
+    /* iOS Safari/Chrome specific height calculation */
+    height: calc(100vh - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0));
+  }
+  
+  .main-content {
+    /* iOS specific padding for Chrome bottom bar */
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+  }
+}
+
 /* Responsive utilities */
 @media (max-width: 768px) {
   .main-content {
     padding: 0;
+    /* Ensure proper spacing for fixed nav */
+    padding-bottom: 70px;
+    /* Ensure proper height */
+    height: 100%;
+    /* iOS Chrome specific padding */
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0));
+  }
+  
+  /* Remove problematic fixed positioning that affects all pages */
+  /* html, body {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  } */
+  
+  .App {
+    height: 100%;
+    overflow: hidden;
+    /* iOS Chrome specific height */
+    height: calc(100vh - env(safe-area-inset-bottom, 0));
+  }
+  
+  /* Allow scrolling only within main content */
+  .main-content {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Special handling for chat page - let chat component handle its own height */
+  .main-content > div[class*="chat"] {
+    /* Remove overflow hidden to prevent header from being cut off */
+    /* overflow: hidden; */
+    /* Ensure chat component can manage its own layout */
+    position: relative;
+    z-index: 1;
   }
 }
 
@@ -94,5 +171,11 @@ h1, h2, h3, h4, h5, h6 {
   
   .app-loading p {
     font-size: 1rem;
+  }
+  
+  .main-content {
+    padding-bottom: 65px;
+    /* iOS Chrome specific padding */
+    padding-bottom: calc(65px + env(safe-area-inset-bottom, 0));
   }
 } 

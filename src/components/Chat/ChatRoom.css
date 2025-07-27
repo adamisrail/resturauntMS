@@ -1,20 +1,32 @@
 .chat-room {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - 70px); /* Subtract bottom nav height */
   width: 100%;
   background: #0b141a;
   overflow: hidden;
-  padding-bottom: 80px;
+  padding-bottom: 0; /* Remove excessive padding */
+  /* Ensure proper spacing from top */
+  padding-top: 0;
+  /* Ensure it doesn't go out of screen */
+  position: relative;
+  /* iOS Chrome specific fixes */
+  height: calc(100vh - 70px - env(safe-area-inset-bottom, 0));
 }
 
 @media (max-width: 768px) {
   .chat-room {
-    padding-bottom: 70px;
+    height: calc(100vh - 60px); /* Subtract bottom nav height on mobile */
+    padding-bottom: 0; /* Remove excessive padding on mobile */
+    /* iOS Chrome specific fixes for mobile */
+    height: calc(100vh - 60px - env(safe-area-inset-bottom, 0));
+    /* Mobile specific height adjustment */
+    height: calc(100vh - 60px - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0));
   }
 }
 
-.chat-header {
+/* Chat-specific header styling - only apply to chat room */
+.chat-room .chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -24,6 +36,26 @@
   position: sticky;
   top: 0;
   z-index: 100;
+  /* Ensure header stays visible */
+  flex-shrink: 0;
+  /* Add safe area support for top */
+  padding-top: calc(15px + env(safe-area-inset-top, 0));
+  /* Ensure header doesn't go out of screen */
+  max-height: 80px;
+  min-height: 60px;
+  /* Force header to stay on top - only for chat */
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 10000 !important;
+  /* Ensure header is above all content */
+  transform: translateZ(0) !important;
+  -webkit-transform: translateZ(0) !important;
+  /* Prevent header from being pushed out */
+  will-change: transform;
+  /* Ensure proper stacking context */
+  isolation: isolate;
 }
 
 .logo-container {
@@ -44,8 +76,11 @@
 .chat-title {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* Reserve space for typing indicator to prevent size changes */
+  min-height: 60px;
 }
 
 .chat-title h2 {
@@ -55,8 +90,6 @@
   color: #e9edef;
   font-family: 'Montserrat', sans-serif;
 }
-
-
 
 .user-info {
   display: flex;
@@ -78,6 +111,16 @@
   background: transparent;
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
+  /* Add top padding to account for fixed header */
+  padding-top: calc(80px + env(safe-area-inset-top, 0));
+  /* Add bottom padding to account for message form */
+  padding-bottom: 100px; /* Increased padding to prevent overlap */
+}
+
+@media (max-width: 768px) {
+  .messages-container {
+    padding-bottom: 90px; /* Increased padding for mobile */
+  }
 }
 
 .messages-container::-webkit-scrollbar {
@@ -170,64 +213,59 @@
   font-family: 'Poppins', sans-serif;
 }
 
-/* Typing Indicator */
+/* Typing Indicator - Positioned in header below title */
 .typing-indicator {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  margin: 0 15px 8px 15px;
-  padding: 8px 12px;
-  background: #202c33;
-  border-radius: 18px;
-  max-width: 200px;
-  animation: fadeIn 0.3s ease-in;
-  position: relative;
-  z-index: 5;
-}
-
-.typing-avatar {
-  flex-shrink: 0;
-}
-
-.typing-avatar-bg {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-}
-
-.typing-avatar-initials {
-  color: white;
-  font-weight: 600;
-  font-size: 12px;
-  font-family: 'Poppins', sans-serif;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 8px;
+  background: transparent; /* Transparent background in header */
+  border-radius: 0;
+  width: 100%;
+  max-width: none;
+  animation: fadeIn 0.3s ease-in;
+  position: relative;
+  z-index: 5;
+  /* Center aligned in header */
+  text-align: center;
+  /* Ensure consistent height */
+  height: 20px;
+  min-height: 20px;
+  max-height: 20px;
 }
 
 .typing-content {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row; /* Changed to horizontal layout */
+  gap: 4px; /* Increased gap for horizontal spacing */
+  /* Center the content */
+  align-items: center;
+  justify-content: center;
+  width: auto; /* Auto width for content */
 }
 
 .typing-text {
-  font-size: 13px;
+  font-size: 11px;
   color: #8696a0;
   font-family: 'Poppins', sans-serif;
   font-weight: 500;
+  margin: 0;
+  line-height: 1;
+  white-space: nowrap; /* Prevent text wrapping */
 }
 
 .typing-dots {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   align-items: center;
+  justify-content: center;
 }
 
 .typing-dots span {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   background: #8696a0;
   border-radius: 50%;
   animation: typingDots 1.4s infinite ease-in-out;
@@ -293,9 +331,21 @@
   padding: 15px;
   background: #0b141a;
   border-top: 1px solid #202c33;
-  position: sticky;
-  bottom: 0;
+  position: fixed; /* Keep fixed positioning */
+  bottom: 70px; /* Position above bottom nav */
+  left: 0;
+  right: 0;
   z-index: 10;
+  /* Mobile safe area support */
+  padding-bottom: calc(15px + env(safe-area-inset-bottom, 0));
+}
+
+@media (max-width: 768px) {
+  .message-form {
+    bottom: 60px; /* Adjust for mobile bottom nav height */
+    /* iOS Chrome specific positioning */
+    bottom: calc(60px + env(safe-area-inset-bottom, 0));
+  }
 }
 
 .message-input {
@@ -323,18 +373,24 @@
 }
 
 .send-button {
-  padding: 12px 20px;
+  padding: 12px 16px;
   background: #005c4b;
   color: white;
   border: none;
   border-radius: 25px;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
-  min-width: 60px;
+  min-width: 50px;
   font-family: 'Poppins', sans-serif;
+  /* Center the emoji */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Ensure proper emoji sizing */
+  line-height: 1;
 }
 
 .send-button:hover {
@@ -356,15 +412,54 @@
   color: #8696a0;
 }
 
+/* iOS Chrome specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .chat-room {
+    /* iOS Safari/Chrome specific height calculation */
+    height: calc(100vh - 70px - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0));
+  }
+  
+  .message-form {
+    /* iOS specific positioning for Chrome bottom bar */
+    bottom: calc(70px + env(safe-area-inset-bottom, 0));
+  }
+  
+  @media (max-width: 768px) {
+    .chat-room {
+      height: calc(100vh - 60px - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0));
+    }
+    
+    .message-form {
+      bottom: calc(60px + env(safe-area-inset-bottom, 0));
+    }
+  }
+}
+
 /* Mobile-first Responsive Design */
 @media (max-width: 768px) {
   .chat-room {
-    height: 100vh;
+    height: calc(100vh - 60px);
     width: 100vw;
+    /* iOS Chrome specific fixes for mobile */
+    height: calc(100vh - 60px - env(safe-area-inset-bottom, 0));
+    /* Mobile specific height adjustment */
+    height: calc(100vh - 60px - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0));
+    /* Ensure proper mobile layout */
+    min-height: 0;
+    max-height: none;
   }
   
   .chat-header {
     padding: 12px 15px;
+    /* Add safe area support for mobile */
+    padding-top: calc(12px + env(safe-area-inset-top, 0));
+    /* Ensure header doesn't go out of screen on mobile */
+    max-height: 70px;
+    min-height: 50px;
+    /* Force header to be visible */
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
   }
   
   .logo-container {
@@ -382,6 +477,8 @@
   
   .messages-container {
     padding: 10px 15px;
+    /* Ensure messages don't overlap with header */
+    padding-top: 10px;
   }
   
   .message-content {
@@ -442,8 +539,30 @@
 }
 
 @media (max-width: 480px) {
+  .chat-room {
+    /* Small mobile specific height */
+    height: calc(100vh - 60px - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0)) !important;
+  }
+  
   .chat-header {
     padding: 10px 12px;
+    /* Add safe area support for small mobile */
+    padding-top: calc(10px + env(safe-area-inset-top, 0));
+    /* Ensure header doesn't go out of screen on small mobile */
+    max-height: 60px !important;
+    min-height: 45px !important;
+    /* Force header to be visible */
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 9999 !important;
+    background: #0b141a !important;
+    border-bottom: 1px solid #202c33 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    /* Ensure header is above all content */
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
   }
   
   .logo-container {
@@ -461,5 +580,87 @@
   
   .message-content {
     max-width: 90%;
+  }
+} 
+
+/* Additional mobile-specific fixes for chat header visibility */
+@media (max-width: 768px) {
+  .chat-room {
+    /* Ensure proper mobile layout */
+    display: flex !important;
+    flex-direction: column !important;
+    height: calc(100vh - 60px - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0)) !important;
+    overflow: hidden !important;
+  }
+  
+  .chat-room .chat-header {
+    /* Force header to be visible on mobile */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 10000 !important;
+    background: #0b141a !important;
+    border-bottom: 1px solid #202c33 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 12px 15px !important;
+    padding-top: calc(12px + env(safe-area-inset-top, 0)) !important;
+    max-height: 70px !important;
+    min-height: 50px !important;
+    flex-shrink: 0 !important;
+    /* Ensure header is above all content */
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+    /* Prevent header from being pushed out */
+    will-change: transform !important;
+    /* Ensure proper stacking context */
+    isolation: isolate !important;
+  }
+  
+  .chat-room .messages-container {
+    /* Ensure messages container doesn't overlap header */
+    flex: 1 !important;
+    overflow-y: auto !important;
+    padding: 10px 15px !important;
+    /* Add top padding to account for fixed header */
+    padding-top: calc(70px + env(safe-area-inset-top, 0)) !important;
+    padding-bottom: 90px !important;
+    /* Ensure proper positioning */
+    position: relative !important;
+    z-index: 1 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-room {
+    height: calc(100vh - 60px - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0)) !important;
+  }
+  
+  .chat-room .chat-header {
+    /* Force header to be visible on small mobile */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 10000 !important;
+    background: #0b141a !important;
+    border-bottom: 1px solid #202c33 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 10px 12px !important;
+    padding-top: calc(10px + env(safe-area-inset-top, 0)) !important;
+    max-height: 60px !important;
+    min-height: 45px !important;
+    flex-shrink: 0 !important;
+    /* Ensure header is above all content */
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+    /* Prevent header from being pushed out */
+    will-change: transform !important;
+    /* Ensure proper stacking context */
+    isolation: isolate !important;
   }
 } 
