@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { collection, orderBy, query, onSnapshot, doc, getDoc, addDoc, deleteDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { initializeDatabase } from './utils/initializeDatabase';
@@ -9,6 +10,9 @@ import ChatRoom from './components/Chat/ChatRoom';
 import Menu from './components/Pages/Menu';
 import Wishlist from './components/Pages/Wishlist';
 import Cart from './components/Pages/Cart';
+import AdminPanel from './components/Admin/AdminPanel';
+import Table from './components/Pages/Table';
+import TableSelector from './components/Pages/TableSelector';
 import NotificationSystem from './components/Notifications/NotificationSystem';
 import './App.css';
 
@@ -533,7 +537,13 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    const q = query(collection(db, "messages"), orderBy("timestamp"));
+    // Determine which collection to listen to based on user's table
+    const tableNumber = user.tableNumber || user.tableId?.replace('table-', '') || null;
+    const collectionName = tableNumber ? `messages-table-${tableNumber}` : 'messages';
+    
+    console.log(`Listening to messages from collection: ${collectionName}`);
+    
+    const q = query(collection(db, collectionName), orderBy("timestamp"));
     
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const messageList = [];
@@ -579,7 +589,13 @@ function App() {
   useEffect(() => {
     if (!user?.phoneNumber) return;
 
-    const typingRef = doc(db, 'typing', 'chat');
+    // Determine which typing document to listen to based on user's table
+    const tableNumber = user.tableNumber || user.tableId?.replace('table-', '') || null;
+    const typingDocName = tableNumber ? `table-${tableNumber}` : 'chat';
+    
+    console.log(`Listening to typing indicators from: ${typingDocName}`);
+    
+    const typingRef = doc(db, 'typing', typingDocName);
     const unsubscribe = onSnapshot(typingRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data();
@@ -636,11 +652,15 @@ function App() {
 
   const addToWishlist = (item) => {
     setWishlist(prev => {
-      const exists = prev.find(wishlistItem => wishlistItem.id === item.id);
+      const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
+      const exists = prev.find(wishlistItem => {
+        const wishlistItemIdentifier = wishlistItem.id || `item-${wishlistItem.name}-${wishlistItem.price}`;
+        return wishlistItemIdentifier === itemIdentifier;
+      });
       if (!exists) {
         // Show success notification
         if (window.addNotification) {
-          window.addNotification(`${item.name} added to wishlist!`, 'error', 3000);
+          window.addNotification(`${item.name} added to wishlist!`, 'success', 3000);
         }
         return [...prev, item];
       }
@@ -650,16 +670,26 @@ function App() {
 
   const removeFromWishlist = (itemId) => {
     setWishlist(prev => {
-      const itemToRemove = prev.find(item => item.id === itemId);
+      const itemToRemove = prev.find(item => {
+        const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
+        return itemIdentifier === itemId;
+      });
       if (itemToRemove && window.addNotification) {
         window.addNotification(`${itemToRemove.name} removed from wishlist`, 'info', 3000);
       }
-      return prev.filter(item => item.id !== itemId);
+      return prev.filter(item => {
+        const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
+        return itemIdentifier !== itemId;
+      });
     });
   };
 
   const isInWishlist = (itemId) => {
-    return wishlist.some(item => item.id === itemId);
+    // Handle both regular IDs and uniqueKey format (item-${index})
+    return wishlist.some(item => {
+      const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
+      return itemIdentifier === itemId;
+    });
   };
 
   // Cart management functions
@@ -992,29 +1022,114 @@ function App() {
   }
 
   return (
-    <div className="App">
-      <NotificationSystem />
-      {user ? (
-        <>
-          {/* <Navbar user={user} onLogout={handleLogout} /> */}
-          <main className="main-content">
-            {renderContent()}
-          </main>
-          <BottomNav 
-            activeTab={activeTab} 
-            onTabChange={handleTabChange} 
-            typingUsers={typingUsers}
-            wishlistCount={wishlist.length}
-            unreadMessageCount={unreadMessageCount}
-            cartCount={getCartItemCount()}
-          />
-          
-
-        </>
-      ) : (
-        <Login onLoginSuccess={handleLoginSuccess} />
-      )}
-    </div>
+    <Router>
+      <div className="App">
+        <NotificationSystem />
+        {user ? (
+          <Routes>
+            {/* Admin Route - Completely separate from customer interface */}
+            <Route 
+              path="/admin" 
+              element={<AdminPanel />} 
+            />
+            
+            {/* Table Selector Route */}
+            <Route 
+              path="/" 
+              element={<TableSelector />} 
+            />
+            
+            {/* Table-specific Routes */}
+            <Route 
+              path="/table1" 
+              element={
+                <Table 
+                  user={user}
+                  tableNumber="1"
+                  onLogout={handleLogout}
+                  wishlist={wishlist}
+                  addToWishlist={addToWishlist}
+                  removeFromWishlist={removeFromWishlist}
+                  isInWishlist={isInWishlist}
+                  addToCart={addToCart}
+                  addGiftToCart={addGiftToCart}
+                  getChatParticipants={getChatParticipants}
+                  menuProducts={menuProducts}
+                  menuProductsLoaded={menuProductsLoaded}
+                  menuProductsLoading={menuProductsLoading}
+                  loadMenuProducts={loadMenuProducts}
+                  cart={cart}
+                  removeFromCart={removeFromCart}
+                  updateCartQuantity={updateCartQuantity}
+                  clearCart={clearCart}
+                  messages={messages}
+                  messagesLoading={messagesLoading}
+                  typingUsers={typingUsers}
+                  unreadMessageCount={unreadMessageCount}
+                  handleTabChange={handleTabChange}
+                  activeTab={activeTab}
+                />
+              } 
+            />
+            
+            <Route 
+              path="/table2" 
+              element={
+                <Table 
+                  user={user}
+                  tableNumber="2"
+                  onLogout={handleLogout}
+                  wishlist={wishlist}
+                  addToWishlist={addToWishlist}
+                  removeFromWishlist={removeFromWishlist}
+                  isInWishlist={isInWishlist}
+                  addToCart={addToCart}
+                  addGiftToCart={addGiftToCart}
+                  getChatParticipants={getChatParticipants}
+                  menuProducts={menuProducts}
+                  menuProductsLoaded={menuProductsLoaded}
+                  menuProductsLoading={menuProductsLoading}
+                  loadMenuProducts={loadMenuProducts}
+                  cart={cart}
+                  removeFromCart={removeFromCart}
+                  updateCartQuantity={updateCartQuantity}
+                  clearCart={clearCart}
+                  messages={messages}
+                  messagesLoading={messagesLoading}
+                  typingUsers={typingUsers}
+                  unreadMessageCount={unreadMessageCount}
+                  handleTabChange={handleTabChange}
+                  activeTab={activeTab}
+                />
+              } 
+            />
+            
+            {/* Default Customer Route - Main app interface */}
+            <Route 
+              path="/*" 
+              element={
+                <>
+                  {/* <Navbar user={user} onLogout={handleLogout} /> */}
+                  <main className="main-content">
+                    {renderContent()}
+                  </main>
+                  <BottomNav 
+                    activeTab={activeTab} 
+                    onTabChange={handleTabChange} 
+                    typingUsers={typingUsers}
+                    wishlistCount={wishlist.length}
+                    unreadMessageCount={unreadMessageCount}
+                    cartCount={getCartItemCount()}
+                  />
+                </>
+              } 
+            />
+          </Routes>
+        ) : (
+          <Login onLoginSuccess={handleLoginSuccess} />
+        )}
+      </div>
+    </Router>
   );
 }
 

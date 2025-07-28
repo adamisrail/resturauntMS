@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { fetchProductsByCategory } from '../../utils/productService';
 import Profile from '../Navigation/Profile';
 import './Pages.css';
@@ -85,7 +87,7 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
     }
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) {
       if (window.addNotification) {
         window.addNotification('Your cart is empty', 'warning', 3000);
@@ -96,7 +98,10 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
     // Check if user has a drink in their cart
     const hasDrink = cart.some(item => {
       // Check if item is from drinks category by checking if it exists in availableDrinks
-      return availableDrinks.some(drink => drink.id === item.id);
+      // Use name and price for comparison since IDs might be different
+      return availableDrinks.some(drink => 
+        drink.name === item.name && drink.price === item.price
+      );
     });
 
     if (!hasDrink) {
@@ -105,16 +110,84 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
       return;
     }
     
-    if (window.addNotification) {
-      window.addNotification('Proceeding to checkout...', 'info', 3000);
+    try {
+      // Create order object
+      const orderData = {
+        customerId: user?.phoneNumber || 'anonymous',
+        customerName: user?.displayName || user?.name || 'Anonymous Customer',
+        customerPhone: user?.phoneNumber || 'N/A',
+        tableNumber: user?.tableNumber || 'Table 1', // Default table number
+        items: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          category: item.category,
+          isGift: item.isGift || false,
+          giftInfo: item.isGift ? {
+            isGiftSent: item.isGiftSent,
+            giftedToName: item.giftedToName,
+            giftedBy: item.giftedBy
+          } : null
+        })),
+        subtotal: cartTotals.subtotal,
+        tax: cartTotals.tax,
+        discount: cartTotals.discount,
+        total: cartTotals.total,
+        status: 'pending',
+        orderDate: serverTimestamp(),
+        paymentMethod: 'cash', // Default payment method
+        deliveryAddress: 'Restaurant Pickup', // Default delivery method
+        specialInstructions: '',
+        estimatedDelivery: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes from now
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      console.log('Creating order:', orderData);
+
+      // Save order to Firestore
+      const orderRef = await addDoc(collection(db, 'orders'), orderData);
+      
+      console.log('Order created successfully with ID:', orderRef.id);
+
+      // Clear cart after successful order
+      clearCart();
+
+      // Show success notification
+      if (window.addNotification) {
+        window.addNotification(
+          `Order placed successfully! Order #${orderRef.id.slice(-6).toUpperCase()}`, 
+          'success', 
+          5000
+        );
+      }
+
+      // TODO: Redirect to order confirmation page or show order details
+      
+    } catch (error) {
+      console.error('Error creating order:', error);
+      if (window.addNotification) {
+        window.addNotification(
+          'Failed to place order. Please try again.', 
+          'error', 
+          5000
+        );
+      }
     }
-    // TODO: Implement checkout logic
   };
 
   const handleAddDrink = (drink) => {
     console.log('Adding drink to cart:', drink);
     if (addToCart) {
-      addToCart(drink, 1);
+      // Create a unique drink item to ensure it's added as new
+      const drinkItem = {
+        ...drink,
+        id: `drink-${drink.name}-${drink.price}`, // Ensure unique ID for drinks
+        category: 'drinks'
+      };
+      addToCart(drinkItem, 1);
       setShowDrinkPopup(false);
       if (window.addNotification) {
         window.addNotification(`${drink.name} added to cart!`, 'success', 3000);
@@ -131,12 +204,73 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
     setShowDrinkPopup(false);
   };
 
-  const handleProceedAnyway = () => {
+  const handleProceedAnyway = async () => {
     setShowDrinkPopup(false);
-    if (window.addNotification) {
-      window.addNotification('Proceeding to checkout without a drink...', 'info', 3000);
+    
+    try {
+      // Create order object (same as handleCheckout but without drink check)
+      const orderData = {
+        customerId: user?.phoneNumber || 'anonymous',
+        customerName: user?.displayName || user?.name || 'Anonymous Customer',
+        customerPhone: user?.phoneNumber || 'N/A',
+        tableNumber: user?.tableNumber || 'Table 1', // Default table number
+        items: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          category: item.category,
+          isGift: item.isGift || false,
+          giftInfo: item.isGift ? {
+            isGiftSent: item.isGiftSent,
+            giftedToName: item.giftedToName,
+            giftedBy: item.giftedBy
+          } : null
+        })),
+        subtotal: cartTotals.subtotal,
+        tax: cartTotals.tax,
+        discount: cartTotals.discount,
+        total: cartTotals.total,
+        status: 'pending',
+        orderDate: serverTimestamp(),
+        paymentMethod: 'cash',
+        deliveryAddress: 'Restaurant Pickup',
+        specialInstructions: 'Order placed without drink',
+        estimatedDelivery: new Date(Date.now() + 30 * 60 * 1000),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      console.log('Creating order (without drink):', orderData);
+
+      // Save order to Firestore
+      const orderRef = await addDoc(collection(db, 'orders'), orderData);
+      
+      console.log('Order created successfully with ID:', orderRef.id);
+
+      // Clear cart after successful order
+      clearCart();
+
+      // Show success notification
+      if (window.addNotification) {
+        window.addNotification(
+          `Order placed successfully! Order #${orderRef.id.slice(-6).toUpperCase()}`, 
+          'success', 
+          5000
+        );
+      }
+      
+    } catch (error) {
+      console.error('Error creating order:', error);
+      if (window.addNotification) {
+        window.addNotification(
+          'Failed to place order. Please try again.', 
+          'error', 
+          5000
+        );
+      }
     }
-    // TODO: Implement actual checkout logic here
   };
 
   return (
@@ -330,8 +464,11 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
              <h2>Add a Drink to Your Order</h2>
              <p>Add a drink—because chewing is hard work.</p>
              <div className="drink-carousel">
-               {availableDrinks.map((drink) => (
-                                        <div key={drink.id} className={`drink-option-card ${drink.orderCount > 150 ? 'popular' : ''}`}>
+               {availableDrinks.map((drink, index) => {
+                 // Ensure unique key - use drink.id if available, otherwise use name-price combination
+                 const uniqueKey = drink.id || `drink-${drink.name}-${drink.price}-${index}`;
+                 return (
+                                        <div key={uniqueKey} className={`drink-option-card ${drink.orderCount > 150 ? 'popular' : ''}`}>
                          <div className="drink-option-header">
                            <img src={drink.image} alt={drink.name} className="drink-option-image" />
                            <h3>{drink.name}</h3>
@@ -353,7 +490,8 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
                      Add to Cart
                    </button>
                  </div>
-               ))}
+               );
+               })}
              </div>
              <button 
                className="proceed-anyway-btn"

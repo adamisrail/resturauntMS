@@ -4,7 +4,7 @@ import { db } from '../../firebase/config';
 import Profile from '../Navigation/Profile';
 import './ChatRoom.css';
 
-const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLogout }) => {
+const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLogout, tableNumber }) => {
   const [newMessage, setNewMessage] = useState('');
   const [userProfile, setUserProfile] = useState(null);
   const [userProfiles, setUserProfiles] = useState({});
@@ -169,10 +169,14 @@ const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLog
         uid: user.uid || user.phoneNumber,
         phoneNumber: user.phoneNumber,
         displayName: userProfile?.name || user.displayName || user.phoneNumber,
-        photoURL: user.photoURL || null
+        photoURL: user.photoURL || null,
+        tableNumber: tableNumber || 'Table 1',
+        tableId: `table-${tableNumber || '1'}`
       };
       
-      await addDoc(collection(db, "messages"), messageData);
+      // Use table-specific collection for messages
+      const collectionName = tableNumber ? `messages-table-${tableNumber}` : 'messages';
+      await addDoc(collection(db, collectionName), messageData);
       
       setNewMessage('');
       setIsTyping(false);
@@ -247,18 +251,20 @@ const ChatRoom = ({ user, messages = [], loading = true, typingUsers = [], onLog
     if (!user?.phoneNumber) return;
     
     try {
-      const typingRef = doc(db, 'typing', 'chat');
+      // Use table-specific typing status
+      const typingRef = doc(db, 'typing', tableNumber ? `table-${tableNumber}` : 'chat');
       await setDoc(typingRef, {
         [user.phoneNumber]: typing ? {
           isTyping: true,
           timestamp: serverTimestamp(),
-          name: userProfile?.name || user.displayName || user.phoneNumber
+          name: userProfile?.name || user.displayName || user.phoneNumber,
+          tableNumber: tableNumber || 'Table 1'
         } : null
       }, { merge: true });
     } catch (error) {
       console.error("Error updating typing status:", error);
     }
-  }, [user?.phoneNumber, userProfile?.name, user?.displayName]);
+  }, [user?.phoneNumber, userProfile?.name, user?.displayName, tableNumber]);
 
 
 

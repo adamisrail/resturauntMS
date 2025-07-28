@@ -56,8 +56,11 @@ const Wishlist = ({ user, onLogout, wishlist, removeFromWishlist, isInWishlist }
           </div>
         ) : (
           <div className="wishlist-items">
-            {wishlist.map((item) => (
-              <div key={item.id} className="wishlist-item">
+            {wishlist.map((item, index) => {
+              // Ensure unique key - use item.id if available, otherwise use name-price combination
+              const uniqueKey = item.id || `item-${item.name}-${item.price}`;
+              return (
+              <div key={uniqueKey} className="wishlist-item">
                 <div className="wishlist-item-image">
                   <img src={item.image} alt={item.name} className="wishlist-item-img" />
                 </div>
@@ -74,13 +77,14 @@ const Wishlist = ({ user, onLogout, wishlist, removeFromWishlist, isInWishlist }
                 </div>
                 <button 
                   className="wishlist-remove-btn"
-                  onClick={() => removeFromWishlist(item.id)}
+                  onClick={() => removeFromWishlist(uniqueKey)}
                   title="Remove from wishlist"
                 >
                   ❌
                 </button>
               </div>
-            ))}
+            );
+            })}
         </div>
         )}
       </div>

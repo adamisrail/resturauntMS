@@ -36,9 +36,22 @@ export const fetchAllProducts = async () => {
     const querySnapshot = await getDocs(productsRef);
     
     const products = {};
+    const seenProducts = new Set(); // Track seen products to prevent duplicates
+    
     querySnapshot.forEach((doc) => {
       const product = { id: doc.id, ...doc.data() };
       const category = product.category || 'main-course';
+      
+      // Create a unique identifier for deduplication
+      const productKey = `${product.name}-${product.price}-${product.category}`;
+      
+      // Skip if we've already seen this product
+      if (seenProducts.has(productKey)) {
+        console.log(`Skipping duplicate product: ${product.name}`);
+        return;
+      }
+      
+      seenProducts.add(productKey);
       
       if (!products[category]) {
         products[category] = [];

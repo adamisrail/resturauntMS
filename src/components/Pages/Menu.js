@@ -135,8 +135,10 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   };
 
   const handleWishlistToggle = (item) => {
-    if (isInWishlist(item.id)) {
-      removeFromWishlist(item.id);
+    // Use the same uniqueKey format as the heart button
+    const uniqueKey = item.id || `item-${item.name}-${item.price}`;
+    if (isInWishlist(uniqueKey)) {
+      removeFromWishlist(uniqueKey);
     } else {
       addToWishlist(item);
     }
@@ -633,7 +635,16 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
       {/* Menu Content */}
       <div className="menu-content">
         {categories.map((category) => {
-          const filteredItems = filterItemsBySearch(menuItems[category.id]);
+          const categoryItems = menuItems[category.id] || [];
+          
+          // Deduplicate items by name and price
+          const uniqueItems = categoryItems.filter((item, index, self) => {
+            const itemKey = `${item.name}-${item.price}`;
+            const firstIndex = self.findIndex(i => `${i.name}-${i.price}` === itemKey);
+            return index === firstIndex;
+          });
+          
+          const filteredItems = filterItemsBySearch(uniqueItems);
           const sortedItems = sortItems(filteredItems);
           
           // Hide category if no items match the search
@@ -649,8 +660,8 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                   <div className="loading-message">Loading {category.name}...</div>
                 ) : sortedItems?.map((item, index) => {
                   const itemLabel = getItemLabel(item);
-                  // Ensure unique key - use item.id if available, otherwise use index
-                  const uniqueKey = item.id || `item-${index}`;
+                  // Ensure unique key - use item.id if available, otherwise use name-price combination
+                  const uniqueKey = item.id || `item-${item.name}-${item.price}`;
                   return (
                 <div key={uniqueKey} className="menu-item">
                       <div 
@@ -663,13 +674,13 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                         )}
                         {layoutMode !== 'compact' && (
                           <button 
-                            className={`favorite-btn ${isInWishlist(item.id) ? 'active' : ''}`}
+                            className={`favorite-btn ${isInWishlist(uniqueKey) ? 'active' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleWishlistToggle(item);
                             }}
                           >
-                            {isInWishlist(item.id) ? '❤️' : '🤍'}
+                            {isInWishlist(uniqueKey) ? '❤️' : '🤍'}
                           </button>
                         )}
                         
