@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Missing Images</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .image-container { 
+            width: 400px; 
+            height: 400px; 
+            background: linear-gradient(45deg, #8B4513, #A0522D);
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            margin: 10px;
+            border-radius: 8px;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .container { display: flex; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <h1>Missing Dessert Images</h1>
+    <p>Right-click on each image and "Save As" to download them as .jpg files</p>
+    
+    <div class="container">
+        <div class="image-container">Chocolate Cake</div>
+        <div class="image-container">Tiramisu</div>
+    </div>
+    
+    <script>
+        // Convert divs to canvas images
+        document.querySelectorAll('.image-container').forEach((div, index) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, 400, 400);
+            gradient.addColorStop(0, '#8B4513');
+            gradient.addColorStop(1, '#A0522D');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 400, 400);
+            
+            // Add text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(div.textContent, 200, 200);
+            
+            // Replace div with canvas
+            div.parentNode.replaceChild(canvas, div);
+        });
+    </script>
+</body>
+</html> 

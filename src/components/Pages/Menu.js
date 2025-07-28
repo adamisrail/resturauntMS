@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { fetchAllProducts, fetchProductsByCategory, PRODUCT_CATEGORIES } from '../../utils/productService';
 import Profile from '../Navigation/Profile';
 import './Pages.css';
 import './Menu.css';
 
-const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isInWishlist, addToCart, addGiftToCart, getChatParticipants }) => {
+const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isInWishlist, addToCart, addGiftToCart, getChatParticipants, menuProducts, menuProductsLoaded, menuProductsLoading, loadMenuProducts }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('main-course');
   const [sortBy, setSortBy] = useState('relevancy');
@@ -21,6 +22,17 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   const [giftDropdownOpen, setGiftDropdownOpen] = useState({});
   const [chatParticipants, setChatParticipants] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
+  // Use global state instead of local state
+  const menuItems = menuProducts;
+  const loading = menuProductsLoading;
+  const productsLoaded = menuProductsLoaded;
+
+  // Function to clear cache and reload products
+  const clearProductCache = () => {
+    sessionStorage.removeItem('cachedMenuProducts');
+    sessionStorage.removeItem('cachedMenuProductsTimestamp');
+    // Note: Global state will be reset when component remounts
+  };
 
   const categories = React.useMemo(() => [
     { id: 'main-course', name: 'Main Course', icon: '🍽️' },
@@ -39,24 +51,12 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
     { value: 'reviews', label: 'Reviews' }
   ];
 
-  const menuItems = {
-    'main-course': [
-      { id: 1, name: 'Grilled Chicken Breast', price: 18.99, description: 'Tender grilled chicken with herbs', fullDescription: 'Our signature grilled chicken breast is marinated in a blend of fresh herbs, garlic, and olive oil, then perfectly grilled to achieve a juicy interior with a crispy, flavorful exterior. Served with seasonal vegetables and your choice of sauce.', image: '🍗', rating: 4.8, popular: true, spiceLevel: 2, chefSpecial: true, orderCount: 156, reviewCount: 89 },
-      { id: 2, name: 'Beef Steak', price: 24.99, description: 'Premium beef steak with garlic butter', fullDescription: 'Premium grade beef steak cooked to your preferred doneness, topped with homemade garlic herb butter that melts perfectly over the meat. Accompanied by roasted potatoes and grilled asparagus for a complete dining experience.', image: '🥩', rating: 4.9, popular: true, spiceLevel: 1, chefSpecial: false, orderCount: 203, reviewCount: 124 }
-    ],
-    'appetizers': [
-      { id: 3, name: 'Bruschetta', price: 8.99, description: 'Toasted bread with tomatoes and basil', fullDescription: 'Fresh Italian bruschetta featuring artisanal bread toasted to perfection, topped with diced ripe tomatoes, fresh basil, garlic, and extra virgin olive oil. A perfect starter that captures the authentic flavors of Italy.', image: '🥖', rating: 4.5, spiceLevel: 0, chefSpecial: false, orderCount: 89, reviewCount: 45 },
-      { id: 4, name: 'Mozzarella Sticks', price: 7.99, description: 'Crispy mozzarella with marinara', fullDescription: 'Hand-breaded mozzarella sticks fried to golden perfection, served with our house-made marinara sauce. The cheese is perfectly melted inside with a crispy, seasoned breadcrumb coating that provides the ideal texture contrast.', image: '🧀', rating: 4.4, spiceLevel: 0, chefSpecial: false, orderCount: 134, reviewCount: 67 }
-    ],
-    'drinks': [
-      { id: 5, name: 'Fresh Lemonade', price: 4.99, description: 'Homemade lemonade with mint', fullDescription: 'Freshly squeezed lemonade made daily with real lemons, natural sweeteners, and a hint of fresh mint. Served over ice with a lemon wedge garnish. Refreshing and perfect for any meal or as a standalone refreshment.', image: '🍋', rating: 4.7, spiceLevel: 0, chefSpecial: true, orderCount: 267, reviewCount: 156 },
-      { id: 6, name: 'Iced Coffee', price: 5.99, description: 'Smooth iced coffee with cream', fullDescription: 'Premium cold-brewed coffee served over ice with your choice of cream or milk. Made from carefully selected coffee beans and brewed for 24 hours to extract the perfect flavor profile without bitterness.', image: '☕', rating: 4.8, spiceLevel: 0, chefSpecial: false, orderCount: 198, reviewCount: 112 }
-    ],
-    'desserts': [
-      { id: 7, name: 'Chocolate Cake', price: 8.99, description: 'Rich chocolate cake with ganache', fullDescription: 'Decadent chocolate cake made with premium dark chocolate and cocoa powder, layered with rich chocolate ganache and topped with chocolate shavings. Each bite offers a perfect balance of sweetness and cocoa intensity.', image: '🍫', rating: 4.9, popular: true, spiceLevel: 0, chefSpecial: true, orderCount: 178, reviewCount: 98 },
-      { id: 8, name: 'Tiramisu', price: 9.99, description: 'Classic Italian dessert', fullDescription: 'Authentic Italian tiramisu featuring layers of coffee-soaked ladyfingers, creamy mascarpone cheese, and a dusting of cocoa powder. Made with imported Italian ingredients for the most authentic taste experience.', image: '☕', rating: 4.8, spiceLevel: 0, chefSpecial: false, orderCount: 145, reviewCount: 78 }
-    ]
-  };
+    // Load products when component mounts if not already loaded
+  useEffect(() => {
+    if (!productsLoaded && Object.keys(menuItems).length === 0) {
+      loadMenuProducts();
+    }
+  }, [productsLoaded, menuItems, loadMenuProducts]);
 
   const scrollToCategory = (categoryId) => {
     setActiveCategory(categoryId);
@@ -190,30 +190,33 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   }, [user?.phoneNumber]);
 
   const handleImageAction = (action, item) => {
+    // Get unique key for this item
+    const uniqueKey = item.id || `item-${item.name}-${item.price}`;
+    
     // Handle different actions
     switch (action) {
       case 'send':
         // Toggle send dropdown for this item
         setSendDropdownOpen(prev => ({
           ...prev,
-          [item.id]: !prev[item.id]
+          [uniqueKey]: !prev[uniqueKey]
         }));
         // Close gift dropdown if open
         setGiftDropdownOpen(prev => ({
           ...prev,
-          [item.id]: false
+          [uniqueKey]: false
         }));
         break;
       case 'gift':
         // Toggle gift dropdown for this item
         setGiftDropdownOpen(prev => ({
           ...prev,
-          [item.id]: !prev[item.id]
+          [uniqueKey]: !prev[uniqueKey]
         }));
         // Close send dropdown if open
         setSendDropdownOpen(prev => ({
           ...prev,
-          [item.id]: false
+          [uniqueKey]: false
         }));
         break;
       case 'cart':
@@ -221,7 +224,7 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
         addToCart(item, 1);
         setClickedImages(prev => ({
           ...prev,
-          [item.id]: false
+          [uniqueKey]: false
         }));
         break;
       case 'wishlist':
@@ -233,14 +236,17 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   };
 
   const handleSendToParticipant = async (participant, item) => {
+    // Get unique key for this item
+    const uniqueKey = item.id || `item-${item.name}-${item.price}`;
+    
     // Close dropdown and overlay
     setSendDropdownOpen(prev => ({
       ...prev,
-      [item.id]: false
+      [uniqueKey]: false
     }));
     setClickedImages(prev => ({
       ...prev,
-      [item.id]: false
+      [uniqueKey]: false
     }));
 
     try {
@@ -269,14 +275,17 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   };
 
   const handleGiftToParticipant = async (participant, item) => {
+    // Get unique key for this item
+    const uniqueKey = item.id || `item-${item.name}-${item.price}`;
+    
     // Close dropdown and overlay
     setGiftDropdownOpen(prev => ({
       ...prev,
-      [item.id]: false
+      [uniqueKey]: false
     }));
     setClickedImages(prev => ({
       ...prev,
-      [item.id]: false
+      [uniqueKey]: false
     }));
 
     try {
@@ -641,15 +650,19 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
           <div key={category.id} id={`category-${category.id}`} className="category-section">
             <h2 className="category-title">{category.name}</h2>
               <div className={`menu-items-grid ${layoutMode === 'list' ? 'list-layout' : layoutMode === 'compact' ? 'compact-layout' : 'grid-layout'}`}>
-                {sortedItems?.map((item) => {
+                {loading ? (
+                  <div className="loading-message">Loading {category.name}...</div>
+                ) : sortedItems?.map((item, index) => {
                   const itemLabel = getItemLabel(item);
+                  // Ensure unique key - use item.id if available, otherwise use index
+                  const uniqueKey = item.id || `item-${index}`;
                   return (
-                <div key={item.id} className="menu-item">
+                <div key={uniqueKey} className="menu-item">
                       <div 
-                        className={`item-image ${clickedImages[item.id] ? 'clicked' : ''}`}
-                        onClick={() => handleImageClick(item.id)}
+                        className={`item-image ${clickedImages[uniqueKey] ? 'clicked' : ''}`}
+                        onClick={() => handleImageClick(uniqueKey)}
                       >
-                    <span className="item-emoji">{item.image}</span>
+                    <img src={item.image} alt={item.name} className="item-image-tag" />
                         {layoutMode !== 'compact' && itemLabel && (
                           <div className={`${itemLabel.type}-badge`}>{itemLabel.text}</div>
                         )}
@@ -666,7 +679,7 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                         )}
                         
                         {/* Image Overlay with Action Icons */}
-                        {clickedImages[item.id] && (
+                        {clickedImages[uniqueKey] && (
                           <div className="image-overlay">
                             <div className="overlay-background"></div>
                             <div className="action-grid">
@@ -681,7 +694,7 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                                 >
                                   🎁
                                 </button>
-                                {giftDropdownOpen[item.id] && (
+                                {giftDropdownOpen[uniqueKey] && (
                                   <div className="gift-dropdown">
                                     <div className="dropdown-header">
                                       <span>Gift to:</span>
@@ -727,7 +740,7 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                                     <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                                   </svg>
                                 </button>
-                                {sendDropdownOpen[item.id] && (
+                                {sendDropdownOpen[uniqueKey] && (
                                                                      <div className="send-dropdown">
                                      <div className="dropdown-header">
                                        <span>Recommend to:</span>

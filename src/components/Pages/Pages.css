@@ -1,15 +1,18 @@
 .page-container {
-  height: 100%;
   display: flex;
   flex-direction: column;
   background: #0b141a;
   color: #e9edef;
-  padding-bottom: 80px;
+  /* Prevent overscroll bounce */
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 768px) {
   .page-container {
-    padding-bottom: 70px;
+    /* Height calculation removed to prevent conflicts */
   }
 }
 
@@ -68,6 +71,11 @@
   padding: 20px;
   background: #0b141a;
   overflow: hidden; /* Prevent page-level scrolling */
+  /* Prevent overscroll bounce */
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .placeholder-content {
@@ -157,9 +165,18 @@
   .page-header p {
     font-size: 0.8rem;
   }
+  
+  .page-content {
+    padding: 10px;
+  }
 }
 
 /* Wishlist Styles */
+.wishlist-page-container {
+  position: relative;
+  top: 65px;
+}
+
 .wishlist-items {
   width: 100%;
   max-width: 600px;
@@ -326,5 +343,43 @@
   
   .wishlist-item-price {
     font-size: 15px;
+  }
+} 
+
+/* Timestamp Display */
+.timestamp-display {
+  position: fixed;
+  bottom: 80px; /* Position above bottom navigation */
+  left: 0;
+  right: 0;
+  background: rgba(11, 20, 26, 0.95);
+  color: #8696a0;
+  font-size: 12px;
+  text-align: center;
+  padding: 8px 16px;
+  border-top: 1px solid #202c33;
+  z-index: 999;
+  backdrop-filter: blur(10px);
+  font-family: 'Courier New', monospace;
+}
+
+.timestamp-display span {
+  font-weight: 500;
+}
+
+/* Mobile optimizations for timestamp */
+@media (max-width: 768px) {
+  .timestamp-display {
+    bottom: 70px;
+    font-size: 11px;
+    padding: 6px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .timestamp-display {
+    bottom: 65px;
+    font-size: 10px;
+    padding: 4px 8px;
   }
 } 

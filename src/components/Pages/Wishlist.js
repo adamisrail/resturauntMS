@@ -1,10 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Profile from '../Navigation/Profile';
 import './Pages.css';
 
 const Wishlist = ({ user, onLogout, wishlist, removeFromWishlist, isInWishlist }) => {
+  // Current deployment timestamp - this will show when the app was deployed
+  const deploymentTime = useMemo(() => new Date('2025-07-27T15:13:28.016Z'), []); // Current deployment time
+  const [secondsSinceDeployment, setSecondsSinceDeployment] = useState(0);
+
+  // Update seconds since deployment every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const diffInSeconds = Math.floor((now - deploymentTime) / 1000);
+      setSecondsSinceDeployment(diffInSeconds);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [deploymentTime]);
+
+  const formatTime = (date) => {
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
   return (
-    <div className="page-container">
+    <div className="page-container wishlist-page-container">
       {/* Header with Logo and Profile */}
       <div className="page-header">
         <div className="logo-container">
@@ -57,6 +83,11 @@ const Wishlist = ({ user, onLogout, wishlist, removeFromWishlist, isInWishlist }
             ))}
         </div>
         )}
+      </div>
+
+      {/* Deployment timestamp above bottom navigation */}
+      <div className="timestamp-display">
+        <span>Deployed: {formatTime(deploymentTime)} | {secondsSinceDeployment}s ago</span>
       </div>
     </div>
   );

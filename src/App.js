@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, orderBy, query, onSnapshot, doc, getDoc, addDoc, deleteDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase/config';
+import { initializeDatabase } from './utils/initializeDatabase';
 import Login from './components/Auth/Login';
 // import Navbar from './components/Navigation/Navbar';
 import BottomNav from './components/Navigation/BottomNav';
@@ -63,6 +64,11 @@ function App() {
   });
 
   const [gifts, setGifts] = useState([]);
+  
+  // Global state for menu products
+  const [menuProducts, setMenuProducts] = useState({});
+  const [menuProductsLoaded, setMenuProductsLoaded] = useState(false);
+  const [menuProductsLoading, setMenuProductsLoading] = useState(false);
   // const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
@@ -72,6 +78,19 @@ function App() {
       setUser(JSON.parse(savedUser));
     }
     setLoading(false);
+  }, []);
+
+  // Initialize database with default products
+  useEffect(() => {
+    const initDB = async () => {
+      try {
+        await initializeDatabase();
+      } catch (error) {
+        console.error('Failed to initialize database:', error);
+      }
+    };
+    
+    initDB();
   }, []);
 
   // Save active tab to localStorage whenever it changes
@@ -91,95 +110,100 @@ function App() {
 
   // Add received and sent gifts to cart when gifts are fetched
   useEffect(() => {
+    // Prevent running during initial render
+    if (!user?.phoneNumber) return;
+    
     const normalizePhone = phone => phone?.replace(/[^0-9]/g, '');
     const normalizedUserPhone = normalizePhone(user?.phoneNumber);
     
     if (gifts.length > 0) {
-      const newGiftsToAdd = [];
-      
-      gifts.forEach(gift => {
-        // Skip test items to avoid duplicate key issues
-        if (gift.itemId === 'test-item') {
-          return;
-        }
+      setCart(prev => {
+        const newGiftsToAdd = [];
         
-        const normalizedGiftRecipient = normalizePhone(gift.recipientPhoneNumber);
-        const normalizedGiftSender = normalizePhone(gift.senderPhoneNumber);
-        
-        // Handle received gifts (current user is recipient)
-        if (normalizedGiftRecipient === normalizedUserPhone) {
-          const giftId = `received-${gift.itemId}-${gift.senderPhoneNumber}`;
-          
-          // Check if gift already exists in cart using current cart state
-          const giftExists = cart.some(item => item.giftId === giftId);
-          if (!giftExists) {
-            // Add received gift to cart
-            const receivedGiftItem = {
-              id: gift.itemId,
-              name: gift.itemName,
-              price: 0, // Free for receiver
-              image: gift.itemImage,
-              description: gift.itemDescription,
-              rating: gift.itemRating,
-              reviewCount: gift.itemReviewCount,
-              quantity: 1,
-              isGift: true,
-              giftedBy: gift.senderName,
-              giftedTo: gift.recipientPhoneNumber,
-              originalPrice: gift.itemPrice,
-              isGiftSent: false,
-              isGiftReceived: true,
-              giftId: giftId,
-              giftDocId: gift.id // Store the Firestore document ID
-            };
-
-            newGiftsToAdd.push(receivedGiftItem);
+        gifts.forEach(gift => {
+          // Skip test items to avoid duplicate key issues
+          if (gift.itemId === 'test-item') {
+            return;
           }
-        }
-        
-        // Handle sent gifts (current user is sender)
-        if (normalizedGiftSender === normalizedUserPhone) {
-          const giftId = `sent-${gift.itemId}-${gift.recipientPhoneNumber}`;
           
-          // Check if gift already exists in cart using current cart state
-          const giftExists = cart.some(item => item.giftId === giftId);
-          if (!giftExists) {
-            // Add sent gift to cart
-            const sentGiftItem = {
-              id: gift.itemId,
-              name: gift.itemName,
-              price: gift.itemPrice, // Sender pays
-              image: gift.itemImage,
-              description: gift.itemDescription,
-              rating: gift.itemRating,
-              reviewCount: gift.itemReviewCount,
-              quantity: 1,
-              isGift: true,
-              giftedBy: gift.senderName,
-              giftedTo: gift.recipientPhoneNumber,
-              giftedToName: gift.recipientName || 'Unknown User',
-              originalPrice: gift.itemPrice,
-              isGiftSent: true,
-              isGiftReceived: false,
-              giftId: giftId,
-              giftDocId: gift.id // Store the Firestore document ID
-            };
+          const normalizedGiftRecipient = normalizePhone(gift.recipientPhoneNumber);
+          const normalizedGiftSender = normalizePhone(gift.senderPhoneNumber);
+          
+          // Handle received gifts (current user is recipient)
+          if (normalizedGiftRecipient === normalizedUserPhone) {
+            const giftId = `received-${gift.itemId}-${gift.senderPhoneNumber}`;
+            
+            // Check if gift already exists in cart using previous cart state
+            const giftExists = prev.some(item => item.giftId === giftId);
+            if (!giftExists) {
+              // Add received gift to cart
+              const receivedGiftItem = {
+                id: gift.itemId,
+                name: gift.itemName,
+                price: 0, // Free for receiver
+                image: gift.itemImage,
+                description: gift.itemDescription,
+                rating: gift.itemRating,
+                reviewCount: gift.itemReviewCount,
+                quantity: 1,
+                isGift: true,
+                giftedBy: gift.senderName,
+                giftedTo: gift.recipientPhoneNumber,
+                originalPrice: gift.itemPrice,
+                isGiftSent: false,
+                isGiftReceived: true,
+                giftId: giftId,
+                giftDocId: gift.id // Store the Firestore document ID
+              };
 
-            newGiftsToAdd.push(sentGiftItem);
+              newGiftsToAdd.push(receivedGiftItem);
+            }
           }
-        }
-      });
-      
-      // Add all new gifts at once to avoid multiple re-renders
-      if (newGiftsToAdd.length > 0) {
-        setCart(prev => {
+          
+          // Handle sent gifts (current user is sender)
+          if (normalizedGiftSender === normalizedUserPhone) {
+            const giftId = `sent-${gift.itemId}-${gift.recipientPhoneNumber}`;
+            
+            // Check if gift already exists in cart using previous cart state
+            const giftExists = prev.some(item => item.giftId === giftId);
+            if (!giftExists) {
+              // Add sent gift to cart
+              const sentGiftItem = {
+                id: gift.itemId,
+                name: gift.itemName,
+                price: gift.itemPrice, // Sender pays
+                image: gift.itemImage,
+                description: gift.itemDescription,
+                rating: gift.itemRating,
+                reviewCount: gift.itemReviewCount,
+                quantity: 1,
+                isGift: true,
+                giftedBy: gift.senderName,
+                giftedTo: gift.recipientPhoneNumber,
+                giftedToName: gift.recipientName || 'Unknown User',
+                originalPrice: gift.itemPrice,
+                isGiftSent: true,
+                isGiftReceived: false,
+                giftId: giftId,
+                giftDocId: gift.id // Store the Firestore document ID
+              };
+
+              newGiftsToAdd.push(sentGiftItem);
+            }
+          }
+        });
+        
+        // Add all new gifts at once to avoid multiple re-renders
+        if (newGiftsToAdd.length > 0) {
           const updatedCart = [...prev, ...newGiftsToAdd];
           const deduplicatedCart = deduplicateCart(updatedCart);
           return deduplicatedCart;
-        });
-      }
+        }
+        
+        return prev; // Return previous state if no changes
+      });
     }
-  }, [gifts, user?.phoneNumber, cart]); // Added cart dependency
+  }, [gifts, user?.phoneNumber]); // Removed cart dependency to prevent infinite loop
 
   // Remove cart gifts that are no longer present in Firestore gifts
   useEffect(() => {
@@ -818,6 +842,53 @@ function App() {
   };
 
   // Get unique chat participants from messages with profile data
+  // Load menu products function
+  const loadMenuProducts = async () => {
+    // If products are already loaded, return them
+    if (menuProductsLoaded && Object.keys(menuProducts).length > 0) {
+      return menuProducts;
+    }
+
+    // Check cache first
+    const cachedProducts = sessionStorage.getItem('cachedMenuProducts');
+    const cacheTimestamp = sessionStorage.getItem('cachedMenuProductsTimestamp');
+    const now = Date.now();
+    const cacheAge = now - (cacheTimestamp ? parseInt(cacheTimestamp) : 0);
+    const cacheValid = cacheAge < 5 * 60 * 1000; // 5 minutes cache
+
+    if (cachedProducts && cacheValid) {
+      try {
+        const products = JSON.parse(cachedProducts);
+        setMenuProducts(products);
+        setMenuProductsLoaded(true);
+        console.log('Loaded menu products from cache');
+        return products;
+      } catch (error) {
+        console.error('Error parsing cached menu products:', error);
+      }
+    }
+
+    // Load from database
+    try {
+      setMenuProductsLoading(true);
+      const { fetchAllProducts } = await import('./utils/productService');
+      const products = await fetchAllProducts();
+      setMenuProducts(products);
+      setMenuProductsLoaded(true);
+      
+      // Cache the products
+      sessionStorage.setItem('cachedMenuProducts', JSON.stringify(products));
+      sessionStorage.setItem('cachedMenuProductsTimestamp', now.toString());
+      console.log('Loaded menu products from database and cached');
+      return products;
+    } catch (error) {
+      console.error('Error loading menu products:', error);
+      return {};
+    } finally {
+      setMenuProductsLoading(false);
+    }
+  };
+
   const getChatParticipants = async () => {
     const uniqueParticipants = new Map();
     
@@ -881,6 +952,10 @@ function App() {
           addToCart={addToCart}
           addGiftToCart={addGiftToCart}
           getChatParticipants={getChatParticipants}
+          menuProducts={menuProducts}
+          menuProductsLoaded={menuProductsLoaded}
+          menuProductsLoading={menuProductsLoading}
+          loadMenuProducts={loadMenuProducts}
         />;
       case 'chat':
         return <ChatRoom user={user} messages={messages} loading={messagesLoading} typingUsers={typingUsers} onLogout={handleLogout} />;
@@ -900,6 +975,7 @@ function App() {
           removeFromCart={removeFromCart}
           updateCartQuantity={updateCartQuantity}
           clearCart={clearCart}
+          addToCart={addToCart}
         />;
       default:
         return <ChatRoom user={user} messages={messages} loading={messagesLoading} typingUsers={typingUsers} onLogout={handleLogout} />;

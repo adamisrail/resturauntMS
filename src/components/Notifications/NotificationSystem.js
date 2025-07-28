@@ -14,54 +14,57 @@ const NotificationSystem = () => {
 
   // Optimized add notification function
   const addNotification = useCallback((message, type = 'info', duration = 4000, options = {}) => {
-    const id = Date.now() + Math.random();
-    const newNotification = {
-      id,
-      message,
-      type,
-      duration,
-      // Only include essential fields
-      sender: options.sender || null,
-      messagePreview: options.messagePreview || null,
-      isMessage: type === 'message' || options.isMessage || false
-    };
+    // Use setTimeout to ensure this runs after render
+    setTimeout(() => {
+      const id = Date.now() + Math.random();
+      const newNotification = {
+        id,
+        message,
+        type,
+        duration,
+        // Only include essential fields
+        sender: options.sender || null,
+        messagePreview: options.messagePreview || null,
+        isMessage: type === 'message' || options.isMessage || false
+      };
 
-    setNotifications(prev => {
-      let updated;
-      
-      if (type === 'message') {
-        // Replace chat notifications
-        const nonChat = prev.filter(n => n.type !== 'message');
-        updated = [newNotification, ...nonChat];
-      } else {
-        // Add to beginning, limit total count
-        updated = [newNotification, ...prev].slice(0, MAX_NOTIFICATIONS);
-      }
-      
-      return updated;
-    });
-    
-    setIsVisible(true);
-
-    // Set timeout
-    if (duration > 0) {
-      const timeoutId = setTimeout(() => {
-        const timeoutId = timeoutsRef.current.get(id);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutsRef.current.delete(id);
+      setNotifications(prev => {
+        let updated;
+        
+        if (type === 'message') {
+          // Replace chat notifications
+          const nonChat = prev.filter(n => n.type !== 'message');
+          updated = [newNotification, ...nonChat];
+        } else {
+          // Add to beginning, limit total count
+          updated = [newNotification, ...prev].slice(0, MAX_NOTIFICATIONS);
         }
+        
+        return updated;
+      });
+      
+      setIsVisible(true);
 
-        setNotifications(prev => {
-          const updated = prev.filter(n => n.id !== id);
-          if (updated.length === 0) {
-            setIsVisible(false);
+      // Set timeout
+      if (duration > 0) {
+        const timeoutId = setTimeout(() => {
+          const timeoutId = timeoutsRef.current.get(id);
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutsRef.current.delete(id);
           }
-          return updated;
-        });
-      }, duration);
-      timeoutsRef.current.set(id, timeoutId);
-    }
+
+          setNotifications(prev => {
+            const updated = prev.filter(n => n.id !== id);
+            if (updated.length === 0) {
+              setIsVisible(false);
+            }
+            return updated;
+          });
+        }, duration);
+        timeoutsRef.current.set(id, timeoutId);
+      }
+    }, 0);
   }, []);
 
   const removeNotification = useCallback((id) => {
@@ -143,7 +146,7 @@ const NotificationSystem = () => {
     return () => {
       delete window.addNotification;
     };
-  }, [addNotification]);
+  }, []); // Remove addNotification dependency to prevent re-running
 
   // Cleanup on unmount
   useEffect(() => {

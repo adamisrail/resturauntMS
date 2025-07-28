@@ -1,13 +1,30 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { fetchProductsByCategory } from '../../utils/productService';
 import Profile from '../Navigation/Profile';
 import './Pages.css';
 import './Cart.css';
 
-const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearCart }) => {
+const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearCart, addToCart }) => {
   const [giftAmount] = useState(0);
   const [discountCode, setDiscountCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(0);
   const [calculationsExpanded, setCalculationsExpanded] = useState(false);
+  const [showDrinkPopup, setShowDrinkPopup] = useState(false);
+  const [availableDrinks, setAvailableDrinks] = useState([]);
+
+  // Fetch drinks from database
+  useEffect(() => {
+    const loadDrinks = async () => {
+      try {
+        const drinks = await fetchProductsByCategory('drinks');
+        setAvailableDrinks(drinks);
+      } catch (error) {
+        console.error('Error loading drinks:', error);
+      }
+    };
+
+    loadDrinks();
+  }, []);
 
   // Calculate cart totals
   const cartTotals = useMemo(() => {
@@ -75,11 +92,51 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
       }
       return;
     }
+
+    // Check if user has a drink in their cart
+    const hasDrink = cart.some(item => {
+      // Check if item is from drinks category by checking if it exists in availableDrinks
+      return availableDrinks.some(drink => drink.id === item.id);
+    });
+
+    if (!hasDrink) {
+      // Show drink popup instead of notification
+      setShowDrinkPopup(true);
+      return;
+    }
     
     if (window.addNotification) {
       window.addNotification('Proceeding to checkout...', 'info', 3000);
     }
     // TODO: Implement checkout logic
+  };
+
+  const handleAddDrink = (drink) => {
+    console.log('Adding drink to cart:', drink);
+    if (addToCart) {
+      addToCart(drink, 1);
+      setShowDrinkPopup(false);
+      if (window.addNotification) {
+        window.addNotification(`${drink.name} added to cart!`, 'success', 3000);
+      }
+    } else {
+      console.error('addToCart function is not available');
+      if (window.addNotification) {
+        window.addNotification('Error: Cannot add to cart', 'error', 3000);
+      }
+    }
+  };
+
+  const handleCloseDrinkPopup = () => {
+    setShowDrinkPopup(false);
+  };
+
+  const handleProceedAnyway = () => {
+    setShowDrinkPopup(false);
+    if (window.addNotification) {
+      window.addNotification('Proceeding to checkout without a drink...', 'info', 3000);
+    }
+    // TODO: Implement actual checkout logic here
   };
 
   return (
@@ -109,17 +166,6 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
           </div>
         ) : (
           <div className="cart-container">
-            {/* Cart Header */}
-            <div className="cart-header">
-              <h2>Cart Items ({cart.length})</h2>
-              <button 
-                className="clear-cart-btn"
-                onClick={clearCart}
-              >
-                Clear Cart
-              </button>
-            </div>
-            
             {/* Cart Items */}
             <div className="cart-items">
               {cart.map((item) => (
@@ -260,7 +306,7 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
                 onClick={() => setCalculationsExpanded(!calculationsExpanded)}
               >
                 <div className="total-button">
-                  <span className="total-label">Total</span>
+                  <span className="total-label">Total ( Click to expand )</span>
                   <span className="total-value">${cartTotals.total.toFixed(2)}</span>
                 </div>
               </div>
@@ -276,6 +322,54 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
         </div>
         )}
       </div>
+
+             {/* Drink Popup */}
+       {showDrinkPopup && (
+         <div className="drink-popup-overlay">
+           <div className="drink-popup-content">
+             <h2>Add a Drink to Your Order</h2>
+             <p>Add a drink—because chewing is hard work.</p>
+             <div className="drink-carousel">
+               {availableDrinks.map((drink) => (
+                                        <div key={drink.id} className={`drink-option-card ${drink.orderCount > 150 ? 'popular' : ''}`}>
+                         <div className="drink-option-header">
+                           <img src={drink.image} alt={drink.name} className="drink-option-image" />
+                           <h3>{drink.name}</h3>
+                         </div>
+                   <p>{drink.description}</p>
+                   {drink.orderCount > 150 ? (
+                     <div className="drink-label">🔥 Most Popular</div>
+                   ) : (
+                     <div className="drink-label-placeholder"></div>
+                   )}
+                   <div className="drink-option-footer">
+                     <span className="drink-rating">⭐ {drink.rating.toFixed(1)}</span>
+                     <span className="drink-price">${drink.price}</span>
+                   </div>
+                   <button 
+                     className="add-to-cart-btn"
+                     onClick={() => handleAddDrink(drink)}
+                   >
+                     Add to Cart
+                   </button>
+                 </div>
+               ))}
+             </div>
+             <button 
+               className="proceed-anyway-btn"
+               onClick={handleProceedAnyway}
+             >
+               Proceed Anyway
+             </button>
+             <button 
+               className="close-popup-btn"
+               onClick={handleCloseDrinkPopup}
+             >
+               Close
+             </button>
+           </div>
+         </div>
+       )}
     </div>
   );
 };

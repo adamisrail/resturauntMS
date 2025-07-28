@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Placeholder Images</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .placeholder { 
+            width: 400px; 
+            height: 400px; 
+            background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            margin: 10px;
+            border-radius: 8px;
+            color: #666;
+            font-size: 18px;
+            text-align: center;
+        }
+        .container { display: flex; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <h1>Placeholder Images for Restaurant Menu</h1>
+    <p>Right-click on each image and "Save As" to download them as .jpg files</p>
+    
+    <div class="container">
+        <div class="placeholder">Vegetarian Pasta</div>
+        <div class="placeholder">Seafood Paella</div>
+        <div class="placeholder">Apple Pie</div>
+        <div class="placeholder">Sparkling Water</div>
+        <div class="placeholder">Chocolate Cake</div>
+        <div class="placeholder">Tiramisu</div>
+        <div class="placeholder">Cheesecake</div>
+        <div class="placeholder">Ice Cream Sundae</div>
+        <div class="placeholder">Crème Brûlée</div>
+    </div>
+    
+    <script>
+        // Convert divs to canvas images
+        document.querySelectorAll('.placeholder').forEach((div, index) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, 400, 400);
+            gradient.addColorStop(0, '#f0f0f0');
+            gradient.addColorStop(1, '#e0e0e0');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 400, 400);
+            
+            // Add text
+            ctx.fillStyle = '#666';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(div.textContent, 200, 200);
+            
+            // Replace div with canvas
+            div.parentNode.replaceChild(canvas, div);
+        });
+    </script>
+</body>
+</html> 

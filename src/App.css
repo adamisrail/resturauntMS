@@ -11,6 +11,9 @@ html {
   /* Prevent zoom on input focus */
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
+  /* Prevent overscroll bounce */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -28,6 +31,10 @@ body {
   overscroll-behavior: none;
   /* Prevent viewport issues */
   position: relative;
+  /* Additional overscroll prevention */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -35,29 +42,31 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .App {
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   /* Mobile specific fixes */
   position: relative;
   /* Prevent viewport issues */
   -webkit-overflow-scrolling: touch;
-  /* iOS Chrome specific height */
-  height: calc(100vh - env(safe-area-inset-bottom, 0));
+  /* Prevent overscroll bounce */
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
 }
 
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   /* Ensure content doesn't interfere with fixed nav */
   padding-bottom: 80px; /* Height of bottom nav */
-  /* Ensure proper height for all pages */
-  height: 100%;
   /* iOS Chrome specific padding */
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+  /* Prevent overscroll bounce */
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app-loading {
@@ -109,11 +118,6 @@ h1, h2, h3, h4, h5, h6 {
 
 /* iOS Chrome specific fixes */
 @supports (-webkit-touch-callout: none) {
-  .App {
-    /* iOS Safari/Chrome specific height calculation */
-    height: calc(100vh - env(safe-area-inset-bottom, 0) - env(safe-area-inset-top, 0));
-  }
-  
   .main-content {
     /* iOS specific padding for Chrome bottom bar */
     padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
@@ -126,37 +130,12 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0;
     /* Ensure proper spacing for fixed nav */
     padding-bottom: 70px;
-    /* Ensure proper height */
-    height: 100%;
     /* iOS Chrome specific padding */
     padding-bottom: calc(70px + env(safe-area-inset-bottom, 0));
   }
   
-  /* Remove problematic fixed positioning that affects all pages */
-  /* html, body {
-    position: fixed;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-  } */
-  
-  .App {
-    height: 100%;
-    overflow: hidden;
-    /* iOS Chrome specific height */
-    height: calc(100vh - env(safe-area-inset-bottom, 0));
-  }
-  
-  /* Allow scrolling only within main content */
-  .main-content {
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  
   /* Special handling for chat page - let chat component handle its own height */
   .main-content > div[class*="chat"] {
-    /* Remove overflow hidden to prevent header from being cut off */
-    /* overflow: hidden; */
     /* Ensure chat component can manage its own layout */
     position: relative;
     z-index: 1;

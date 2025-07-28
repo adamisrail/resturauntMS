@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Xander's Product Images</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .image-container { 
+            width: 400px; 
+            height: 400px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            margin: 10px;
+            border-radius: 8px;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .container { display: flex; flex-wrap: wrap; justify-content: center; }
+        h1 { text-align: center; color: #333; }
+        p { text-align: center; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>Xander's Product Images</h1>
+    <p>Right-click on each image and "Save As" to download them as .jpg files</p>
+    
+    <div class="container">
+        <div class="image-container" style="background: linear-gradient(45deg, #8B4513, #A0522D);">Arugula Steak</div>
+        <div class="image-container" style="background: linear-gradient(45deg, #FF6B35, #FF8C42);">Budak Crispy Chicken</div>
+        <div class="image-container" style="background: linear-gradient(45deg, #4CAF50, #66BB6A);">Mediterranean Wrap</div>
+        <div class="image-container" style="background: linear-gradient(45deg, #795548, #8D6E63);">Beef Ciabatta Sandwich</div>
+        <div class="image-container" style="background: linear-gradient(45deg, #E91E63, #F06292);">Tiramisu Pancake</div>
+    </div>
+    
+    <script>
+        // Convert divs to canvas images
+        document.querySelectorAll('.image-container').forEach((div, index) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            
+            // Get the background style
+            const bgStyle = div.style.background;
+            const colors = bgStyle.match(/linear-gradient\(45deg, (#[A-Fa-f0-9]{6}), (#[A-Fa-f0-9]{6})\)/);
+            
+            if (colors) {
+                const gradient = ctx.createLinearGradient(0, 0, 400, 400);
+                gradient.addColorStop(0, colors[1]);
+                gradient.addColorStop(1, colors[2]);
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 400, 400);
+            }
+            
+            // Add text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(div.textContent, 200, 200);
+            
+            // Replace div with canvas
+            div.parentNode.replaceChild(canvas, div);
+        });
+    </script>
+</body>
+</html> 

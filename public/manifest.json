@@ -1,0 +1,15 @@
+{
+  "short_name": "Restaurant MS",
+  "name": "Restaurant Management System",
+  "icons": [
+    {
+      "src": "58c33377dfcbb3022493dec49d098b02.jpg",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/jpeg"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#0b141a"
+} 
