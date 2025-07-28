@@ -146,7 +146,7 @@ const NotificationSystem = () => {
     return () => {
       delete window.addNotification;
     };
-  }, []); // Remove addNotification dependency to prevent re-running
+  }, [addNotification]); // Added addNotification dependency
 
   // Cleanup on unmount
   useEffect(() => {

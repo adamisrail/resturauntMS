@@ -24,7 +24,7 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
     };
 
     loadDrinks();
-  }, []);
+  }, []); // Empty dependency array - only run once on mount
 
   // Calculate cart totals
   const cartTotals = useMemo(() => {
@@ -171,7 +171,7 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
               {cart.map((item) => (
                 <div key={item.giftId || item.id} className={`cart-item${item.isGift ? (item.isGiftSent ? ' gift-sent' : ' gift-received') : ''}`}>
                   <div className="cart-item-image">
-                    <span className="cart-item-emoji">{item.image}</span>
+                    <img src={item.image} alt={item.name} className="cart-item-img" />
                   </div>
                   
                   <div className="cart-item-details">

@@ -533,7 +533,7 @@ export const initializeDefaultProducts = async () => {
   };
 
   try {
-    for (const [category, products] of Object.entries(defaultProducts)) {
+    for (const [, products] of Object.entries(defaultProducts)) {
       for (const product of products) {
         await addProduct(product);
       }

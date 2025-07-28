@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { fetchAllProducts, fetchProductsByCategory, PRODUCT_CATEGORIES } from '../../utils/productService';
+// Removed unused imports to fix build warnings
 import Profile from '../Navigation/Profile';
 import './Pages.css';
 import './Menu.css';
@@ -27,12 +27,7 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   const loading = menuProductsLoading;
   const productsLoaded = menuProductsLoaded;
 
-  // Function to clear cache and reload products
-  const clearProductCache = () => {
-    sessionStorage.removeItem('cachedMenuProducts');
-    sessionStorage.removeItem('cachedMenuProductsTimestamp');
-    // Note: Global state will be reset when component remounts
-  };
+  // Removed unused clearProductCache function to fix build warnings
 
   const categories = React.useMemo(() => [
     { id: 'main-course', name: 'Main Course', icon: '🍽️' },

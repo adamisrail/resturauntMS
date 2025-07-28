@@ -59,7 +59,7 @@ const Wishlist = ({ user, onLogout, wishlist, removeFromWishlist, isInWishlist }
             {wishlist.map((item) => (
               <div key={item.id} className="wishlist-item">
                 <div className="wishlist-item-image">
-                  <span className="wishlist-item-emoji">{item.image}</span>
+                  <img src={item.image} alt={item.name} className="wishlist-item-img" />
                 </div>
                 <div className="wishlist-item-details">
                   <h3 className="wishlist-item-name">{item.name}</h3>
