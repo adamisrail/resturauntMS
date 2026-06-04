@@ -1,175 +1,97 @@
 import React, { useState } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { verifyStaffLogin } from '../../utils/storeService';
 import './Login.css';
 
 const Login = ({ onLoginSuccess }) => {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [isNewUser, setIsNewUser] = useState(false);
-
-  const handlePhoneSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      // Check if user exists in Firestore
-      const userDoc = await getDoc(doc(db, 'users', phoneNumber));
-      const userExists = userDoc.exists();
-      
-      console.log('User exists:', userExists); // Debug log
-      console.log('Phone number:', phoneNumber); // Debug log
-      
-      setIsNewUser(!userExists);
-
-      if (!userExists) {
-        // New user - show name input
-        console.log('New user detected, showing name input'); // Debug log
-        setLoading(false);
-      } else {
-        // Existing user - create a mock auth session
-        const userData = userDoc.data();
-        console.log('Existing user data:', userData); // Debug log
-        
-        const mockUser = {
-          uid: phoneNumber,
-          phoneNumber: phoneNumber,
-          displayName: userData?.name || phoneNumber
-        };
-        
-        // Store in localStorage for session management
-        localStorage.setItem('currentUser', JSON.stringify(mockUser));
-        onLoginSuccess();
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('Failed to check user. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  const handleNameSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      console.log('Creating new user account...'); // Debug log
-      console.log('Name:', name); // Debug log
-      console.log('Phone:', phoneNumber); // Debug log
-      
-      // Save user data to Firestore
-      const userData = {
-        name: name,
-        phoneNumber: phoneNumber,
-        createdAt: new Date(),
-        lastLogin: new Date()
-      };
-      
-      console.log('User data to save:', userData); // Debug log
-      
-      await setDoc(doc(db, 'users', phoneNumber), userData);
-      
-      console.log('User account created successfully!'); // Debug log
-      
-      // Create mock auth session
-      const mockUser = {
-        uid: phoneNumber,
-        phoneNumber: phoneNumber,
-        displayName: name
-      };
-      
-      localStorage.setItem('currentUser', JSON.stringify(mockUser));
-      onLoginSuccess();
-    } catch (error) {
-      console.error('Error creating account:', error); // Debug log
-      setError('Failed to create account. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  const renderPhoneStep = () => (
-    <form onSubmit={handlePhoneSubmit} className="login-form">
-      <div className="form-group">
-        <label htmlFor="phone">Phone Number</label>
-        <input
-          type="tel"
-          id="phone"
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-          placeholder="Enter your phone number (e.g., +1234567890)"
-          required
-        />
-      </div>
-
-      <button 
-        type="submit" 
-        className="login-button"
-        disabled={loading}
-      >
-        {loading ? 'Checking...' : 'Continue'}
-      </button>
-    </form>
-  );
-
-  const renderNameStep = () => (
-    <form onSubmit={handleNameSubmit} className="login-form">
-      <div className="form-group">
-        <label htmlFor="name">Your Name</label>
-        <input
-          type="text"
-          id="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Enter your full name"
-          required
-        />
-      </div>
-
-      <button 
-        type="submit" 
-        className="login-button"
-        disabled={loading}
-      >
-        {loading ? 'Creating Account...' : 'Create Account'}
-      </button>
-
-      <button 
-        type="button" 
-        className="back-button"
-        onClick={() => {
-          setIsNewUser(false);
-          setName('');
-          setError('');
-        }}
-        disabled={loading}
-      >
-        Back to Phone Number
-      </button>
-    </form>
-  );
-
   return (
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
           <h1>Restaurant MS</h1>
-          <p>{isNewUser ? 'Complete Profile' : 'Enter Phone Number'}</p>
+          <p>Staff Login</p>
         </div>
-
-        {error && <div className="error-message">{error}</div>}
-
-        {!isNewUser ? renderPhoneStep() : renderNameStep()}
-
-        <div className="login-footer">
-          <p>Enter your phone number to sign in or create an account</p>
-        </div>
+        <StaffLogin onLoginSuccess={onLoginSuccess} />
       </div>
     </div>
   );
 };
 
-export default Login; 
+// ─── Customer login (phone number) ───────────────────────────────────────────
+// ─── Staff login (email or phone + password) ─────────────────────────────────
+const StaffLogin = ({ onLoginSuccess }) => {
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await verifyStaffLogin(phone.trim(), password);
+      if (!result) {
+        setError('Incorrect phone number or password.');
+        setLoading(false);
+        return;
+      }
+
+      // Store session
+      localStorage.setItem('currentUser', JSON.stringify({
+        uid: result.phoneNumber,
+        phoneNumber: result.phoneNumber,
+        displayName: result.name,
+        name: result.name,
+        isStaffLogin: true,
+        storeSlug: result.storeSlug,
+        storeId: result.storeId,
+        role: result.role,
+      }));
+
+      onLoginSuccess(result.storeSlug);
+    } catch (err) {
+      setError('Login failed. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="login-form">
+      <div className="form-group">
+        <label>Email or Phone Number</label>
+        <input
+          type="text"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="email@example.com or +1234567890"
+          required
+          autoFocus
+        />
+      </div>
+      <div className="form-group">
+        <label>Password</label>
+        <div className="password-input-row">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            required
+          />
+          <button type="button" className="password-toggle" onClick={() => setShowPassword(s => !s)}>
+            {showPassword ? '🙈' : '👁'}
+          </button>
+        </div>
+      </div>
+      {error && <div className="error-message">{error}</div>}
+      <button type="submit" className="login-button" disabled={loading}>
+        {loading ? 'Signing in...' : 'Sign In'}
+      </button>
+      <div className="login-footer-note">Use your email or phone number with the password given to you</div>
+    </form>
+  );
+};
+
+export default Login;

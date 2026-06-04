@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-// Removed unused imports to fix build warnings
+import { useStore } from '../../contexts/StoreContext';
 import Profile from '../Navigation/Profile';
 import './Pages.css';
 import './Menu.css';
 
 const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isInWishlist, addToCart, addGiftToCart, getChatParticipants, menuProducts, menuProductsLoaded, menuProductsLoading, loadMenuProducts }) => {
+  // Get the current store so we load only this store's products
+  const { store } = useStore();
+  const storeId = store?.id || null;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('main-course');
   const [sortBy, setSortBy] = useState('relevancy');
-  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
+  const [sortOrder, setSortOrder] = useState('desc');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [layoutMode, setLayoutMode] = useState('grid'); // 'grid' for 2 per row, 'list' for 1 per row, 'compact' for compact list
+  const [layoutMode, setLayoutMode] = useState('grid');
   const [expandedDescriptions, setExpandedDescriptions] = useState({});
   const [notificationCount, setNotificationCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
@@ -22,10 +26,8 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   const [giftDropdownOpen, setGiftDropdownOpen] = useState({});
   const [chatParticipants, setChatParticipants] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
-  // Use global state instead of local state
   const menuItems = menuProducts;
   const loading = menuProductsLoading;
-  const productsLoaded = menuProductsLoaded;
 
   // Removed unused clearProductCache function to fix build warnings
 
@@ -46,12 +48,11 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
     { value: 'reviews', label: 'Reviews' }
   ];
 
-    // Load products when component mounts if not already loaded
+  // Load this store's products. Re-runs whenever storeId changes (user navigates to a different store).
   useEffect(() => {
-    if (!productsLoaded && Object.keys(menuItems).length === 0) {
-      loadMenuProducts();
-    }
-  }, [productsLoaded, menuItems, loadMenuProducts]);
+    loadMenuProducts(storeId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
 
   const scrollToCategory = (categoryId) => {
     setActiveCategory(categoryId);
@@ -668,7 +669,20 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                         className={`item-image ${clickedImages[uniqueKey] ? 'clicked' : ''}`}
                         onClick={() => handleImageClick(uniqueKey)}
                       >
-                    <img src={item.image} alt={item.name} className="item-image-tag" />
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="item-image-tag"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        const placeholder = e.target.parentNode.querySelector('.item-image-placeholder');
+                        if (placeholder) placeholder.style.display = 'flex';
+                      }}
+                    />
+                    <div className="item-image-placeholder" style={{display: 'none', position: 'absolute', inset: 0}}>
+                      <span>🍽️</span>
+                      <span>{item.name}</span>
+                    </div>
                         {layoutMode !== 'compact' && itemLabel && (
                           <div className={`${itemLabel.type}-badge`}>{itemLabel.text}</div>
                         )}

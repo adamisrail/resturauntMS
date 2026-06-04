@@ -1,644 +1,324 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useParams, Navigate } from 'react-router-dom';
 import { collection, orderBy, query, onSnapshot, doc, getDoc, addDoc, deleteDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase/config';
-import { initializeDatabase } from './utils/initializeDatabase';
+import { StoreProvider } from './contexts/StoreContext';
 import Login from './components/Auth/Login';
-// import Navbar from './components/Navigation/Navbar';
-import BottomNav from './components/Navigation/BottomNav';
-import ChatRoom from './components/Chat/ChatRoom';
-import Menu from './components/Pages/Menu';
-import Wishlist from './components/Pages/Wishlist';
-import Cart from './components/Pages/Cart';
 import AdminPanel from './components/Admin/AdminPanel';
+import JoinStore from './components/Store/JoinStore';
 import Table from './components/Pages/Table';
 import TableSelector from './components/Pages/TableSelector';
+import SuperAdmin from './components/SuperAdmin/SuperAdmin';
 import NotificationSystem from './components/Notifications/NotificationSystem';
 import './App.css';
 
+// ---------------------------------------------------------------------------
+// StoreRoutes — nested under /:storeSlug
+// Table + TableSelector are PUBLIC. Admin requires login.
+// ---------------------------------------------------------------------------
+function StoreRoutes(props) {
+  const { storeSlug } = useParams();
+  return (
+    <StoreProvider storeSlug={storeSlug}>
+      <Routes>
+        {/* PUBLIC */}
+        <Route path="/" element={<TableSelector />} />
+        <Route path="/table/:tableNumber" element={<Table {...props} />} />
+        <Route path="/join" element={<JoinStore user={props.user} />} />
+
+        {/* PROTECTED — redirects to /login if not logged in */}
+        <Route
+          path="/admin"
+          element={
+            <RequireAuth user={props.user} redirectTo={`/${storeSlug}/admin`}>
+              <AdminPanel user={props.user} onLogout={props.onLogout} />
+            </RequireAuth>
+          }
+        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </StoreProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RequireAuth — redirects to /login if user is not logged in
+// ---------------------------------------------------------------------------
+function RequireAuth({ user, children, redirectTo }) {
+  if (!user) {
+    const dest = redirectTo || window.location.pathname;
+    window.location.href = `/login?redirect=${encodeURIComponent(dest)}`;
+    return null;
+  }
+  return children;
+}
+
+// ---------------------------------------------------------------------------
+// AppRoutes — lives inside the Router
+// ---------------------------------------------------------------------------
+function AppRoutes({ user, handleLoginSuccess, handleLogout, ...rest }) {
+  return (
+    <>
+      <NotificationSystem />
+      <Routes>
+        {/* "/" — requires login, redirects to /login if not authenticated */}
+        <Route path="/" element={
+          user
+            ? <StoreProvider storeSlug={null}><TableSelector /></StoreProvider>
+            : <Navigate to="/login" replace />
+        } />
+
+        <Route path="/table/:tableNumber" element={
+          <StoreProvider storeSlug={null}>
+            <Table user={user} onLogout={handleLogout} {...rest} />
+          </StoreProvider>
+        } />
+
+        {/* Dedicated login page */}
+        <Route path="/login" element={
+          <Login onLoginSuccess={(slug) => {
+            handleLoginSuccess(slug);
+            const params = new URLSearchParams(window.location.search);
+            const redirect = params.get('redirect');
+            if (redirect) window.location.href = redirect;
+          }} />
+        } />
+
+        {/* Legacy redirects */}
+        <Route path="/table1" element={<Navigate to="/table/1" replace />} />
+        <Route path="/table2" element={<Navigate to="/table/2" replace />} />
+
+        {/* /admin — SuperAdmin has its own password gate, always render it */}
+        <Route path="/admin" element={<SuperAdmin />} />
+
+        {/* Store-scoped routes */}
+        <Route
+          path="/:storeSlug/*"
+          element={
+            <StoreRoutes
+              user={user}
+              onLogout={handleLogout}
+              handleLoginSuccess={handleLoginSuccess}
+              {...rest}
+            />
+          }
+        />
+      </Routes>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// App — auth + global state, wraps the router
+// ---------------------------------------------------------------------------
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(() => {
-    // Get the last visited tab from localStorage, default to 'menu'
-    const savedTab = localStorage.getItem('lastActiveTab');
-    return savedTab || 'menu';
-  });
-
-  // Track current page for notification logic
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('lastActiveTab') || 'menu');
   const [currentPage, setCurrentPage] = useState('menu');
-  
-  // Track unread message count
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [typingUsers, setTypingUsers] = useState([]);
-  
-  // Notification grouping system
   const [groupedNotifications, setGroupedNotifications] = useState({});
   const [notificationTimeouts, setNotificationTimeouts] = useState({});
+
   const [wishlist, setWishlist] = useState(() => {
-    // Get wishlist from localStorage
-    const savedWishlist = localStorage.getItem('wishlist');
-    return savedWishlist ? JSON.parse(savedWishlist) : [];
+    const saved = localStorage.getItem('wishlist');
+    return saved ? JSON.parse(saved) : [];
   });
 
-  // Deduplication function for cart items
-  const deduplicateCart = (cartItems) => {
+  const deduplicateCart = (items) => {
     const seen = new Set();
-    return cartItems.filter(item => {
-      // Create a unique key that includes both itemId and whether it's a gift
-      const uniqueKey = `${item.id}-${item.isGift ? 'gift' : 'regular'}`;
-      
-      if (seen.has(uniqueKey)) {
-        return false;
-      }
-      seen.add(uniqueKey);
+    return items.filter(item => {
+      const key = `${item.id}-${item.isGift ? 'gift' : 'regular'}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
   };
 
   const [cart, setCart] = useState(() => {
-    // Get cart from localStorage and deduplicate
-    const savedCart = localStorage.getItem('cart');
-    const parsedCart = savedCart ? JSON.parse(savedCart) : [];
-    const deduplicatedCart = deduplicateCart(parsedCart);
-    
-    return deduplicatedCart;
+    const saved = localStorage.getItem('cart');
+    return saved ? deduplicateCart(JSON.parse(saved)) : [];
   });
 
   const [gifts, setGifts] = useState([]);
-  
-  // Global state for menu products
   const [menuProducts, setMenuProducts] = useState({});
   const [menuProductsLoaded, setMenuProductsLoaded] = useState(false);
   const [menuProductsLoading, setMenuProductsLoading] = useState(false);
-  // const [userProfile, setUserProfile] = useState(null);
+  const [menuProductsStoreId, setMenuProductsStoreId] = useState(null);
 
+  // Persist state
+  useEffect(() => { localStorage.setItem('lastActiveTab', activeTab); }, [activeTab]);
+  useEffect(() => { localStorage.setItem('wishlist', JSON.stringify(wishlist)); }, [wishlist]);
+  useEffect(() => { localStorage.setItem('cart', JSON.stringify(cart)); }, [cart]);
+
+  // Restore session
   useEffect(() => {
-    // Check for existing user session in localStorage
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    const saved = localStorage.getItem('currentUser');
+    if (saved) setUser(JSON.parse(saved));
     setLoading(false);
   }, []);
 
-  // Initialize database with default products
+  // Gift → cart sync
   useEffect(() => {
-    const initDB = async () => {
-      try {
-        await initializeDatabase();
-      } catch (error) {
-        console.error('Failed to initialize database:', error);
-      }
-    };
-    
-    initDB();
-  }, []);
+    if (!user?.phoneNumber || gifts.length === 0) return;
+    const norm = p => p?.replace(/[^0-9]/g, '');
+    const me = norm(user.phoneNumber);
 
-  // Save active tab to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('lastActiveTab', activeTab);
-  }, [activeTab]);
-
-  // Save wishlist to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('wishlist', JSON.stringify(wishlist));
-  }, [wishlist]);
-
-  // Save cart to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-  }, [cart]);
-
-  // Add received and sent gifts to cart when gifts are fetched
-  useEffect(() => {
-    // Prevent running during initial render
-    if (!user?.phoneNumber) return;
-    
-    const normalizePhone = phone => phone?.replace(/[^0-9]/g, '');
-    const normalizedUserPhone = normalizePhone(user?.phoneNumber);
-    
-    if (gifts.length > 0) {
-      setCart(prev => {
-        const newGiftsToAdd = [];
-        
-        gifts.forEach(gift => {
-          // Skip test items to avoid duplicate key issues
-          if (gift.itemId === 'test-item') {
-            return;
-          }
-          
-          const normalizedGiftRecipient = normalizePhone(gift.recipientPhoneNumber);
-          const normalizedGiftSender = normalizePhone(gift.senderPhoneNumber);
-          
-          // Handle received gifts (current user is recipient)
-          if (normalizedGiftRecipient === normalizedUserPhone) {
-            const giftId = `received-${gift.itemId}-${gift.senderPhoneNumber}`;
-            
-            // Check if gift already exists in cart using previous cart state
-            const giftExists = prev.some(item => item.giftId === giftId);
-            if (!giftExists) {
-              // Add received gift to cart
-              const receivedGiftItem = {
-                id: gift.itemId,
-                name: gift.itemName,
-                price: 0, // Free for receiver
-                image: gift.itemImage,
-                description: gift.itemDescription,
-                rating: gift.itemRating,
-                reviewCount: gift.itemReviewCount,
-                quantity: 1,
-                isGift: true,
-                giftedBy: gift.senderName,
-                giftedTo: gift.recipientPhoneNumber,
-                originalPrice: gift.itemPrice,
-                isGiftSent: false,
-                isGiftReceived: true,
-                giftId: giftId,
-                giftDocId: gift.id // Store the Firestore document ID
-              };
-
-              newGiftsToAdd.push(receivedGiftItem);
-            }
-          }
-          
-          // Handle sent gifts (current user is sender)
-          if (normalizedGiftSender === normalizedUserPhone) {
-            const giftId = `sent-${gift.itemId}-${gift.recipientPhoneNumber}`;
-            
-            // Check if gift already exists in cart using previous cart state
-            const giftExists = prev.some(item => item.giftId === giftId);
-            if (!giftExists) {
-              // Add sent gift to cart
-              const sentGiftItem = {
-                id: gift.itemId,
-                name: gift.itemName,
-                price: gift.itemPrice, // Sender pays
-                image: gift.itemImage,
-                description: gift.itemDescription,
-                rating: gift.itemRating,
-                reviewCount: gift.itemReviewCount,
-                quantity: 1,
-                isGift: true,
-                giftedBy: gift.senderName,
-                giftedTo: gift.recipientPhoneNumber,
-                giftedToName: gift.recipientName || 'Unknown User',
-                originalPrice: gift.itemPrice,
-                isGiftSent: true,
-                isGiftReceived: false,
-                giftId: giftId,
-                giftDocId: gift.id // Store the Firestore document ID
-              };
-
-              newGiftsToAdd.push(sentGiftItem);
-            }
-          }
-        });
-        
-        // Add all new gifts at once to avoid multiple re-renders
-        if (newGiftsToAdd.length > 0) {
-          const updatedCart = [...prev, ...newGiftsToAdd];
-          const deduplicatedCart = deduplicateCart(updatedCart);
-          return deduplicatedCart;
-        }
-        
-        return prev; // Return previous state if no changes
-      });
-    }
-  }, [gifts, user?.phoneNumber]); // Removed cart dependency to prevent infinite loop
-
-  // Remove cart gifts that are no longer present in Firestore gifts
-  useEffect(() => {
-    // Get all giftIds from the current gifts state
-    const validGiftIds = new Set();
-    const normalizePhone = phone => phone?.replace(/[^0-9]/g, '');
-    const normalizedUserPhone = normalizePhone(user?.phoneNumber);
-    
-    gifts.forEach(gift => {
-      // Skip test items
-      if (gift.itemId === 'test-item') {
-        return;
-      }
-      
-      // For received gifts (gift exists in Firestore and user is recipient)
-      if (normalizePhone(gift.recipientPhoneNumber) === normalizedUserPhone) {
-        const giftId = `received-${gift.itemId}-${gift.senderPhoneNumber}`;
-        validGiftIds.add(giftId);
-      }
-      // For sent gifts (gift exists in Firestore and user is sender)
-      if (normalizePhone(gift.senderPhoneNumber) === normalizedUserPhone) {
-        const giftId = `sent-${gift.itemId}-${gift.recipientPhoneNumber}`;
-        validGiftIds.add(giftId);
-      }
-    });
-    
-    // Remove any cart gift items not in validGiftIds, and also remove test items
     setCart(prev => {
-      const filteredCart = prev.filter(item => {
-        // Remove test items
-        if (item.id === 'test-item') {
-          return false;
+      const toAdd = [];
+      gifts.forEach(gift => {
+        if (gift.itemId === 'test-item') return;
+        if (norm(gift.recipientPhoneNumber) === me) {
+          const giftId = `received-${gift.itemId}-${gift.senderPhoneNumber}`;
+          if (!prev.some(i => i.giftId === giftId)) {
+            toAdd.push({ id: gift.itemId, name: gift.itemName, price: 0, image: gift.itemImage, description: gift.itemDescription, rating: gift.itemRating, reviewCount: gift.itemReviewCount, quantity: 1, isGift: true, giftedBy: gift.senderName, giftedTo: gift.recipientPhoneNumber, originalPrice: gift.itemPrice, isGiftSent: false, isGiftReceived: true, giftId, giftDocId: gift.id });
+          }
         }
-        
-        if (!item.isGift) return true;
-        const isValid = validGiftIds.has(item.giftId);
-        return isValid;
+        if (norm(gift.senderPhoneNumber) === me) {
+          const giftId = `sent-${gift.itemId}-${gift.recipientPhoneNumber}`;
+          if (!prev.some(i => i.giftId === giftId)) {
+            toAdd.push({ id: gift.itemId, name: gift.itemName, price: gift.itemPrice, image: gift.itemImage, description: gift.itemDescription, rating: gift.itemRating, reviewCount: gift.itemReviewCount, quantity: 1, isGift: true, giftedBy: gift.senderName, giftedTo: gift.recipientPhoneNumber, giftedToName: gift.recipientName || 'Unknown', originalPrice: gift.itemPrice, isGiftSent: true, isGiftReceived: false, giftId, giftDocId: gift.id });
+          }
+        }
       });
-      
-      // Apply deduplication to ensure no duplicates remain
-      const deduplicatedCart = deduplicateCart(filteredCart);
-      return deduplicatedCart;
+      if (toAdd.length === 0) return prev;
+      return deduplicateCart([...prev, ...toAdd]);
     });
   }, [gifts, user?.phoneNumber]);
 
-  // Fetch user profile for gift functionality
+  // Remove stale gift cart items
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user?.phoneNumber) return;
-      
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.phoneNumber));
-        if (userDoc.exists()) {
-                  // const profileData = userDoc.data();
-        // setUserProfile(profileData);
-        }
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
-      }
-    };
+    const norm = p => p?.replace(/[^0-9]/g, '');
+    const me = norm(user?.phoneNumber);
+    const valid = new Set();
+    gifts.forEach(gift => {
+      if (gift.itemId === 'test-item') return;
+      if (norm(gift.recipientPhoneNumber) === me) valid.add(`received-${gift.itemId}-${gift.senderPhoneNumber}`);
+      if (norm(gift.senderPhoneNumber) === me) valid.add(`sent-${gift.itemId}-${gift.recipientPhoneNumber}`);
+    });
+    setCart(prev => deduplicateCart(prev.filter(i => i.id !== 'test-item' && (!i.isGift || valid.has(i.giftId)))));
+  }, [gifts, user?.phoneNumber]);
 
-    fetchUserProfile();
-  }, [user?.phoneNumber]);
-
-  // Fetch gifts for the current user
+  // Gifts subscription
   useEffect(() => {
     if (!user?.phoneNumber) return;
-
-
-
-    // Use the existing index with status and timestamp only
-    const giftsQuery = query(
-      collection(db, 'gifts'),
-      where('status', '==', 'active'),
-      orderBy('timestamp', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(giftsQuery, (querySnapshot) => {
-      const giftsData = [];
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        
-        // Include all gifts for the current user (both sent and received)
-        // The filtering for removed items will be handled in the cart sync useEffect
-        if (data.senderPhoneNumber === user.phoneNumber || 
-            data.recipientPhoneNumber === user.phoneNumber) {
-          giftsData.push({
-            id: doc.id,
-            ...data
-          });
+    const q = query(collection(db, 'gifts'), where('status', '==', 'active'), orderBy('timestamp', 'desc'));
+    const unsub = onSnapshot(q, snapshot => {
+      const data = [];
+      snapshot.forEach(d => {
+        const g = d.data();
+        if (g.senderPhoneNumber === user.phoneNumber || g.recipientPhoneNumber === user.phoneNumber) {
+          data.push({ id: d.id, ...g });
         }
       });
-      
-      setGifts(giftsData);
+      setGifts(data);
     });
-
-    return () => unsubscribe();
+    return unsub;
   }, [user?.phoneNumber]);
 
-  // Function to handle grouped notifications
+  // Grouped notification helper
   const handleGroupedNotification = React.useCallback(async (newMessage) => {
-    const senderPhoneNumber = newMessage.phoneNumber;
-    
-    // Handle recommendation messages separately - they get special notifications
-    if (newMessage.type === 'recommendation') {
-      // Only show notification if the current user is NOT the sender
-      if (newMessage.phoneNumber !== user.phoneNumber) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', senderPhoneNumber));
-          let senderName = senderPhoneNumber; // fallback to phone number
-          
-          if (userDoc.exists()) {
-            const profileData = userDoc.data();
-            senderName = profileData.name || profileData.displayName || senderPhoneNumber;
-          }
-          
-          // Create recommendation notification
-          if (window.addNotification) {
-            const itemName = newMessage.recommendedItem;
-            const itemPrice = newMessage.recommendedItemPrice;
-            const recommendedTo = newMessage.recommendedTo;
-            const priceText = itemPrice ? ` ($${itemPrice})` : '';
-            
-            window.addNotification(
-              `${senderName} recommended "${itemName}"${priceText} to ${recommendedTo}`,
-              'recommendation',
-              6000,
-              {
-                sender: senderName,
-                receiver: recommendedTo,
-                itemName: itemName,
-                itemPrice: itemPrice,
-                isRecommendation: true
-              }
-            );
-          }
-        } catch (error) {
-          console.error("Error handling recommendation notification:", error);
-        }
+    const sender = newMessage.phoneNumber;
+
+    if (newMessage.type === 'recommendation' && sender !== user.phoneNumber) {
+      const userDoc = await getDoc(doc(db, 'users', sender)).catch(() => null);
+      const name = userDoc?.exists() ? (userDoc.data().name || sender) : sender;
+      if (window.addNotification) {
+        window.addNotification(`${name} recommended "${newMessage.recommendedItem}"`, 'recommendation', 6000, { sender: name, isRecommendation: true });
       }
-      
-      return; // Don't process as regular chat message
+      return;
     }
-    
-    // Handle gift messages separately - they get special notifications
-    if (newMessage.type === 'gift') {
-      // Only show notification if the current user is NOT the sender
-      if (newMessage.phoneNumber !== user.phoneNumber) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', senderPhoneNumber));
-          let senderName = senderPhoneNumber; // fallback to phone number
-          
-          if (userDoc.exists()) {
-            const profileData = userDoc.data();
-            senderName = profileData.name || profileData.displayName || senderPhoneNumber;
-          }
-          
-          // Create gift notification
-          if (window.addNotification) {
-            const itemName = newMessage.giftedItem;
-            const itemPrice = newMessage.giftedItemPrice;
-            const giftedTo = newMessage.giftedTo;
-            const priceText = itemPrice ? ` ($${itemPrice})` : '';
-            
-            window.addNotification(
-              `${senderName} gifted "${itemName}"${priceText} to ${giftedTo}`,
-              'gift',
-              6000,
-              {
-                sender: senderName,
-                receiver: giftedTo,
-                itemName: itemName,
-                itemPrice: itemPrice,
-                isGift: true
-              }
-            );
-          }
-        } catch (error) {
-          console.error("Error handling gift notification:", error);
-        }
+
+    if (newMessage.type === 'gift' && sender !== user.phoneNumber) {
+      const userDoc = await getDoc(doc(db, 'users', sender)).catch(() => null);
+      const name = userDoc?.exists() ? (userDoc.data().name || sender) : sender;
+      if (window.addNotification) {
+        window.addNotification(`${name} gifted "${newMessage.giftedItem}"`, 'gift', 6000, { sender: name, isGift: true });
       }
-      
-      return; // Don't process as regular chat message
+      return;
     }
-    
+
+    if (newMessage.type === 'recommendation' || newMessage.type === 'gift') return;
+
     try {
-      const userDoc = await getDoc(doc(db, 'users', senderPhoneNumber));
-      let senderName = senderPhoneNumber; // fallback to phone number
-      
-      if (userDoc.exists()) {
-        const profileData = userDoc.data();
-        senderName = profileData.name || profileData.displayName || senderPhoneNumber;
-      }
-      
-      // Increment unread message count
-      setUnreadMessageCount(prev => prev + 1);
-      
-      // Create enhanced message preview for gift messages
-      let messagePreview = newMessage.text;
-      if (newMessage.type === 'gift' && newMessage.giftedItem && newMessage.giftedTo) {
-        // Extract item name and price from the gift message
-        const itemName = newMessage.giftedItem;
-        const itemPrice = newMessage.giftedItemPrice;
-        const giftedTo = newMessage.giftedTo;
-        
-        // Create a more informative preview with price
-        const priceText = itemPrice ? ` ($${itemPrice})` : '';
-        messagePreview = `${senderName} gifted "${itemName}"${priceText} to ${giftedTo}`;
-      }
-      
-      // Check if we already have a grouped notification for this sender
-      const existingGroup = groupedNotifications[senderPhoneNumber];
-      
-      if (existingGroup) {
-        // Update existing grouped notification
-        const updatedGroup = {
-          ...existingGroup,
-          messageCount: existingGroup.messageCount + 1,
-          lastMessage: messagePreview,
-          lastMessageTime: new Date()
-        };
-        
-        setGroupedNotifications(prev => ({
-          ...prev,
-          [senderPhoneNumber]: updatedGroup
-        }));
-        
-        // Clear existing timeout and set new one
-        if (notificationTimeouts[senderPhoneNumber]) {
-          clearTimeout(notificationTimeouts[senderPhoneNumber]);
+      const userDoc = await getDoc(doc(db, 'users', sender));
+      const senderName = userDoc.exists() ? (userDoc.data().name || sender) : sender;
+      setUnreadMessageCount(p => p + 1);
+
+      const existing = groupedNotifications[sender];
+      const count = existing ? existing.messageCount + 1 : 1;
+      setGroupedNotifications(prev => ({ ...prev, [sender]: { senderPhoneNumber: sender, senderName, messageCount: count, lastMessage: newMessage.text, lastMessageTime: new Date() } }));
+
+      if (notificationTimeouts[sender]) clearTimeout(notificationTimeouts[sender]);
+      const t = setTimeout(() => {
+        if (window.addNotification) {
+          window.addNotification(senderName, 'message', 5000, { sender: senderName, messagePreview: count > 1 ? `${count} new messages` : newMessage.text, isMessage: true });
         }
-        
-        const newTimeout = setTimeout(() => {
-          // Show the grouped notification
-          if (window.addNotification) {
-            const messageText = updatedGroup.messageCount === 1 
-              ? updatedGroup.lastMessage 
-              : `${updatedGroup.messageCount} new messages`;
-            
-            window.addNotification(
-              senderName,
-              'message',
-              5000,
-              {
-                sender: senderName,
-                messagePreview: messageText,
-                isMessage: true
-              }
-            );
-          }
-          
-          // Clear the grouped notification
-          setGroupedNotifications(prev => {
-            const newState = { ...prev };
-            delete newState[senderPhoneNumber];
-            return newState;
-          });
-          
-          setNotificationTimeouts(prev => {
-            const newState = { ...prev };
-            delete newState[senderPhoneNumber];
-            return newState;
-          });
-        }, 1000); // Wait 1 second before showing notification
-        
-        setNotificationTimeouts(prev => ({
-          ...prev,
-          [senderPhoneNumber]: newTimeout
-        }));
-        
-      } else {
-        // Create new grouped notification
-        const newGroup = {
-          senderPhoneNumber,
-          senderName,
-          messageCount: 1,
-          lastMessage: messagePreview,
-          lastMessageTime: new Date()
-        };
-        
-        setGroupedNotifications(prev => ({
-          ...prev,
-          [senderPhoneNumber]: newGroup
-        }));
-        
-        const timeout = setTimeout(() => {
-          // Show the grouped notification
-          if (window.addNotification) {
-            window.addNotification(
-              senderName,
-              'message',
-              5000,
-              {
-                sender: senderName,
-                messagePreview: messagePreview,
-                isMessage: true
-              }
-            );
-          }
-          
-          // Clear the grouped notification
-          setGroupedNotifications(prev => {
-            const newState = { ...prev };
-            delete newState[senderPhoneNumber];
-            return newState;
-          });
-          
-          setNotificationTimeouts(prev => {
-            const newState = { ...prev };
-            delete newState[senderPhoneNumber];
-            return newState;
-          });
-        }, 1000); // Wait 1 second before showing notification
-        
-        setNotificationTimeouts(prev => ({
-          ...prev,
-          [senderPhoneNumber]: timeout
-        }));
-      }
-    } catch (error) {
-      console.error("Error handling notification:", error);
-    }
+        setGroupedNotifications(p => { const n = { ...p }; delete n[sender]; return n; });
+        setNotificationTimeouts(p => { const n = { ...p }; delete n[sender]; return n; });
+      }, 1000);
+      setNotificationTimeouts(prev => ({ ...prev, [sender]: t }));
+    } catch (e) { console.error(e); }
   }, [user?.phoneNumber, groupedNotifications, notificationTimeouts]);
 
-  // Set up messages subscription once when user is available
+  // Messages subscription
   useEffect(() => {
     if (!user) return;
-
-    // Determine which collection to listen to based on user's table
     const tableNumber = user.tableNumber || user.tableId?.replace('table-', '') || null;
-    const collectionName = tableNumber ? `messages-table-${tableNumber}` : 'messages';
-    
-    console.log(`Listening to messages from collection: ${collectionName}`);
-    
-    const q = query(collection(db, collectionName), orderBy("timestamp"));
-    
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const messageList = [];
-      let newMessage = null;
-      
-      querySnapshot.forEach((doc) => {
-        const messageData = { id: doc.id, ...doc.data() };
-        messageList.push(messageData);
-        
-        // Check if this is a new message (within last 2 seconds)
-        const messageTime = messageData.timestamp?.toDate?.() || new Date(messageData.timestamp);
-        const now = new Date();
-        const timeDiff = (now - messageTime) / 1000;
-        
-        if (timeDiff < 2 && messageData.phoneNumber !== user?.phoneNumber) {
-          newMessage = messageData;
-        }
+    const col = tableNumber ? `messages-table-${tableNumber}` : 'messages';
+    const q = query(collection(db, col), orderBy('timestamp'));
+    const unsub = onSnapshot(q, snapshot => {
+      const list = [];
+      let newMsg = null;
+      snapshot.forEach(d => {
+        const m = { id: d.id, ...d.data() };
+        list.push(m);
+        const t = m.timestamp?.toDate?.() || new Date(m.timestamp);
+        if ((Date.now() - t) / 1000 < 2 && m.phoneNumber !== user.phoneNumber) newMsg = m;
       });
-      
-      setMessages(messageList);
+      setMessages(list);
       setMessagesLoading(false);
-      
-      // Show grouped notification for new message if user is not on chat page
-      if (newMessage && currentPage !== 'chat') {
-        handleGroupedNotification(newMessage);
-      }
+      if (newMsg && currentPage !== 'chat') handleGroupedNotification(newMsg);
     });
-
-    return () => unsubscribe();
+    return unsub;
   }, [user, currentPage, handleGroupedNotification]);
 
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      // Clear all notification timeouts
-      Object.values(notificationTimeouts).forEach(timeoutId => {
-        clearTimeout(timeoutId);
-      });
-    };
-  }, [notificationTimeouts]);
-
-  // Listen for typing indicators
+  // Typing subscription
   useEffect(() => {
     if (!user?.phoneNumber) return;
-
-    // Determine which typing document to listen to based on user's table
     const tableNumber = user.tableNumber || user.tableId?.replace('table-', '') || null;
-    const typingDocName = tableNumber ? `table-${tableNumber}` : 'chat';
-    
-    console.log(`Listening to typing indicators from: ${typingDocName}`);
-    
-    const typingRef = doc(db, 'typing', typingDocName);
-    const unsubscribe = onSnapshot(typingRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        const typing = [];
-        // let newTypingUser = null;
-        
-        Object.entries(data).forEach(([phoneNumber, userData]) => {
-          if (phoneNumber !== user.phoneNumber && userData?.isTyping) {
-            // Check if typing status is recent (within 5 seconds)
-            const timestamp = userData.timestamp?.toDate?.();
-            const now = new Date();
-            const timeDiff = timestamp ? (now - timestamp) / 1000 : 0;
-            
-            if (timeDiff < 5) {
-              typing.push({
-                phoneNumber,
-                name: userData.name
-              });
-              
-              // Check if this is a new typing indicator (within last 1 second)
-              if (timeDiff < 1) {
-                // newTypingUser = userData.name || phoneNumber;
-              }
-            }
-          }
-        });
-        
-        setTypingUsers(typing);
-        
-        // Removed typing notifications - only show message notifications from other users
-      } else {
-        setTypingUsers([]);
-      }
+    const docName = tableNumber ? `table-${tableNumber}` : 'chat';
+    const unsub = onSnapshot(doc(db, 'typing', docName), d => {
+      if (!d.exists()) { setTypingUsers([]); return; }
+      const data = d.data();
+      const typing = [];
+      Object.entries(data).forEach(([phone, u]) => {
+        if (phone !== user.phoneNumber && u?.isTyping) {
+          const ts = u.timestamp?.toDate?.();
+          if (!ts || (Date.now() - ts) / 1000 < 5) typing.push({ phoneNumber: phone, name: u.name });
+        }
+      });
+      setTypingUsers(typing);
     });
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.phoneNumber, user?.tableNumber, user?.tableId, currentPage]);
 
-    return () => unsubscribe();
-  }, [user?.phoneNumber, currentPage]);
+  useEffect(() => () => Object.values(notificationTimeouts).forEach(clearTimeout), [notificationTimeouts]);
 
-  const handleLoginSuccess = () => {
-    // Get the user from localStorage and update state
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+  const handleLoginSuccess = (storeSlug) => {
+    const saved = localStorage.getItem('currentUser');
+    if (saved) {
+      const u = JSON.parse(saved);
+      setUser(u);
+      // Staff login → redirect straight to their store admin
+      if (storeSlug) {
+        window.location.href = `/${storeSlug}/admin`;
+      }
     }
   };
 
@@ -650,487 +330,158 @@ function App() {
     setWishlist([]);
   };
 
-  const addToWishlist = (item) => {
-    setWishlist(prev => {
-      const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
-      const exists = prev.find(wishlistItem => {
-        const wishlistItemIdentifier = wishlistItem.id || `item-${wishlistItem.name}-${wishlistItem.price}`;
-        return wishlistItemIdentifier === itemIdentifier;
-      });
-      if (!exists) {
-        // Show success notification
-        if (window.addNotification) {
-          window.addNotification(`${item.name} added to wishlist!`, 'success', 3000);
-        }
-        return [...prev, item];
-      }
-      return prev;
-    });
-  };
+  // Wishlist helpers
+  const addToWishlist = (item) => setWishlist(prev => {
+    const id = item.id || `item-${item.name}-${item.price}`;
+    if (prev.some(i => (i.id || `item-${i.name}-${i.price}`) === id)) return prev;
+    if (window.addNotification) window.addNotification(`${item.name} added to wishlist!`, 'success', 3000);
+    return [...prev, item];
+  });
 
-  const removeFromWishlist = (itemId) => {
-    setWishlist(prev => {
-      const itemToRemove = prev.find(item => {
-        const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
-        return itemIdentifier === itemId;
-      });
-      if (itemToRemove && window.addNotification) {
-        window.addNotification(`${itemToRemove.name} removed from wishlist`, 'info', 3000);
-      }
-      return prev.filter(item => {
-        const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
-        return itemIdentifier !== itemId;
-      });
-    });
-  };
+  const removeFromWishlist = (itemId) => setWishlist(prev => {
+    const item = prev.find(i => (i.id || `item-${i.name}-${i.price}`) === itemId);
+    if (item && window.addNotification) window.addNotification(`${item.name} removed from wishlist`, 'info', 3000);
+    return prev.filter(i => (i.id || `item-${i.name}-${i.price}`) !== itemId);
+  });
 
-  const isInWishlist = (itemId) => {
-    // Handle both regular IDs and uniqueKey format (item-${index})
-    return wishlist.some(item => {
-      const itemIdentifier = item.id || `item-${item.name}-${item.price}`;
-      return itemIdentifier === itemId;
-    });
-  };
+  const isInWishlist = (itemId) => wishlist.some(i => (i.id || `item-${i.name}-${i.price}`) === itemId);
 
-  // Cart management functions
+  // Cart helpers
   const addToCart = (item, quantity = 1) => {
     setCart(prev => {
-      // Check for existing item with same id AND same type (gift vs regular)
-      const existingItem = prev.find(cartItem => 
-        cartItem.id === item.id && cartItem.isGift === item.isGift
-      );
-      
-      if (existingItem) {
-        // Update quantity if item already exists (same id AND same type)
-        return prev.map(cartItem => 
-          cartItem.id === item.id && cartItem.isGift === item.isGift
-            ? { ...cartItem, quantity: cartItem.quantity + quantity }
-            : cartItem
-        );
-      } else {
-        // Add new item to cart
-        return [...prev, { ...item, quantity }];
-      }
+      const existing = prev.find(c => c.id === item.id && c.isGift === item.isGift);
+      if (existing) return prev.map(c => c.id === item.id && c.isGift === item.isGift ? { ...c, quantity: c.quantity + quantity } : c);
+      return [...prev, { ...item, quantity }];
     });
-    
-    if (window.addNotification) {
-      window.addNotification(`${item.name} added to cart`, 'success', 3000);
-    }
+    if (window.addNotification) window.addNotification(`${item.name} added to cart`, 'success', 3000);
   };
 
-  const removeFromCart = (itemId) => {
-    setCart(prev => {
-      const itemToRemove = prev.find(item => {
-        const itemIdentifier = item.giftId || item.id;
-        return itemIdentifier === itemId;
-      });
-      
-      if (itemToRemove && window.addNotification) {
-        window.addNotification(`${itemToRemove.name} removed from cart`, 'info', 3000);
-      }
-      
-      // If it's a gift, delete it from Firestore completely
-      if (itemToRemove?.giftDocId) {
-        // Delete the gift document from Firestore
-        deleteDoc(doc(db, 'gifts', itemToRemove.giftDocId)).catch(error => {
-          console.error('Error deleting gift from Firestore:', error);
-          if (window.addNotification) {
-            window.addNotification('Failed to remove gift', 'error', 3000);
-          }
-        });
-      }
-      
-      return prev.filter(item => {
-        const itemIdentifier = item.giftId || item.id;
-        return itemIdentifier !== itemId;
-      });
-    });
+  const removeFromCart = (itemId) => setCart(prev => {
+    const item = prev.find(i => (i.giftId || i.id) === itemId);
+    if (item && window.addNotification) window.addNotification(`${item.name} removed from cart`, 'info', 3000);
+    if (item?.giftDocId) deleteDoc(doc(db, 'gifts', item.giftDocId)).catch(console.error);
+    return prev.filter(i => (i.giftId || i.id) !== itemId);
+  });
+
+  const updateCartQuantity = (itemId, qty) => {
+    if (qty <= 0) { removeFromCart(itemId); return; }
+    setCart(prev => prev.map(i => (i.giftId || i.id) === itemId ? { ...i, quantity: i.isGift ? 1 : qty } : i));
   };
 
-  const updateCartQuantity = (itemId, newQuantity) => {
-    if (newQuantity <= 0) {
-      removeFromCart(itemId);
-      return;
-    }
-    
-    setCart(prev => 
-      prev.map(item => {
-        const itemIdentifier = item.giftId || item.id;
-        if (itemIdentifier === itemId) {
-          // For gift items, always keep quantity at 1
-          if (item.isGift) {
-            return { ...item, quantity: 1 };
-          }
-          // For regular items, allow quantity changes
-          return { ...item, quantity: newQuantity };
-        }
-        return item;
-      })
-    );
-  };
+  const clearCart = () => { setCart([]); if (window.addNotification) window.addNotification('Cart cleared', 'info', 3000); };
+  const getCartItemCount = () => cart.reduce((s, i) => s + i.quantity, 0);
 
-  const clearCart = () => {
-    setCart([]);
-    if (window.addNotification) {
-      window.addNotification('Cart cleared', 'info', 3000);
-    }
-  };
-
-  const getCartItemCount = () => {
-    return cart.reduce((total, item) => total + item.quantity, 0);
-  };
-
-
-
-  // Add gift to Firestore and handle cart updates
   const addGiftToCart = async (item, recipientPhoneNumber, senderName, recipientName) => {
     try {
-      // Check if this gift already exists in Firestore
-      const existingGiftQuery = query(
-        collection(db, 'gifts'),
-        where('itemId', '==', item.id),
-        where('senderPhoneNumber', '==', user.phoneNumber),
-        where('recipientPhoneNumber', '==', recipientPhoneNumber),
-        where('status', '==', 'active')
-      );
-      
-      const existingGiftSnapshot = await getDocs(existingGiftQuery);
-      
-      if (!existingGiftSnapshot.empty) {
-        // Gift already exists, show error message
-        if (window.addNotification) {
-          window.addNotification('You cannot gift the same item twice to the same person', 'error', 3000);
-        }
-        return false; // Return false to indicate failure
+      const existing = await getDocs(query(collection(db, 'gifts'), where('itemId', '==', item.id), where('senderPhoneNumber', '==', user.phoneNumber), where('recipientPhoneNumber', '==', recipientPhoneNumber), where('status', '==', 'active')));
+      if (!existing.empty) {
+        if (window.addNotification) window.addNotification('You already gifted this item to this person', 'error', 3000);
+        return false;
       }
-
-      // Store gift in Firestore
-      const giftData = {
-        itemId: item.id,
-        itemName: item.name,
-        itemPrice: item.price,
-        itemImage: item.image,
-        itemDescription: item.description,
-        itemRating: item.rating,
-        itemReviewCount: item.reviewCount,
-        senderPhoneNumber: user.phoneNumber,
-        senderName: senderName,
-        recipientPhoneNumber: recipientPhoneNumber,
-        recipientName: recipientName,
-        timestamp: serverTimestamp(),
-        status: 'active',
-        removedBySender: false,
-        removedByReceiver: false
-      };
-
-      const giftDocRef = await addDoc(collection(db, 'gifts'), giftData);
-
-      // Add gift to sender's cart (they pay for it)
-      const senderGiftItem = {
-        ...item,
-        quantity: 1,
-        isGift: true,
-        giftedBy: senderName,
-        giftedTo: recipientPhoneNumber,
-        giftedToName: recipientName,
-        originalPrice: item.price,
-        isGiftSent: true,
-        isGiftReceived: false,
-        price: item.price, // Sender pays
-        giftId: `sent-${item.id}-${recipientPhoneNumber}`,
-        giftDocId: giftDocRef.id // Store the Firestore document ID
-      };
-
+      const ref = await addDoc(collection(db, 'gifts'), { itemId: item.id, itemName: item.name, itemPrice: item.price, itemImage: item.image, itemDescription: item.description, itemRating: item.rating, itemReviewCount: item.reviewCount, senderPhoneNumber: user.phoneNumber, senderName, recipientPhoneNumber, recipientName, timestamp: serverTimestamp(), status: 'active', removedBySender: false, removedByReceiver: false });
       setCart(prev => {
-        const existingItem = prev.find(cartItem => 
-          cartItem.giftId === senderGiftItem.giftId
-        );
-        
-        if (existingItem) {
-          // Gift already exists, keep quantity at 1 (don't increment)
-          return prev;
-        } else {
-          // Add new gift with quantity 1
-          return [...prev, senderGiftItem];
-        }
+        const giftId = `sent-${item.id}-${recipientPhoneNumber}`;
+        if (prev.some(i => i.giftId === giftId)) return prev;
+        return [...prev, { ...item, quantity: 1, isGift: true, giftedBy: senderName, giftedTo: recipientPhoneNumber, giftedToName: recipientName, originalPrice: item.price, isGiftSent: true, isGiftReceived: false, giftId, giftDocId: ref.id }];
       });
-
-      // Show success message
-      if (window.addNotification) {
-        window.addNotification(`Gift sent to ${recipientName}!`, 'success', 3000);
-      }
-
-      return true; // Return true to indicate success
-
-    } catch (error) {
-      console.error("Error adding gift:", error);
-      if (window.addNotification) {
-        window.addNotification('Failed to send gift', 'error', 3000);
-      }
-      return false; // Return false to indicate failure
+      if (window.addNotification) window.addNotification(`Gift sent to ${recipientName}!`, 'success', 3000);
+      return true;
+    } catch (e) {
+      console.error(e);
+      if (window.addNotification) window.addNotification('Failed to send gift', 'error', 3000);
+      return false;
     }
   };
 
-  // Get unique chat participants from messages with profile data
-  // Load menu products function
-  const loadMenuProducts = async () => {
-    // If products are already loaded, return them
-    if (menuProductsLoaded && Object.keys(menuProducts).length > 0) {
+  const loadMenuProducts = async (storeId = null) => {
+    // Return cached products only if they're for the same store
+    if (menuProductsLoaded && menuProductsStoreId === storeId && Object.keys(menuProducts).length > 0) {
       return menuProducts;
     }
 
-    // Check cache first
-    const cachedProducts = sessionStorage.getItem('cachedMenuProducts');
-    const cacheTimestamp = sessionStorage.getItem('cachedMenuProductsTimestamp');
-    const now = Date.now();
-    const cacheAge = now - (cacheTimestamp ? parseInt(cacheTimestamp) : 0);
-    const cacheValid = cacheAge < 5 * 60 * 1000; // 5 minutes cache
-
-    if (cachedProducts && cacheValid) {
+    const cacheKey = `cachedMenuProducts_${storeId || 'global'}`;
+    const tsKey = `${cacheKey}_ts`;
+    const cached = sessionStorage.getItem(cacheKey);
+    const ts = sessionStorage.getItem(tsKey);
+    if (cached && ts && Date.now() - parseInt(ts) < 5 * 60 * 1000) {
       try {
-        const products = JSON.parse(cachedProducts);
-        setMenuProducts(products);
+        const p = JSON.parse(cached);
+        setMenuProducts(p);
         setMenuProductsLoaded(true);
-        console.log('Loaded menu products from cache');
-        return products;
-      } catch (error) {
-        console.error('Error parsing cached menu products:', error);
-      }
+        setMenuProductsStoreId(storeId);
+        return p;
+      } catch (_) {}
     }
 
-    // Load from database
     try {
       setMenuProductsLoading(true);
       const { fetchAllProducts } = await import('./utils/productService');
-      const products = await fetchAllProducts();
-      setMenuProducts(products);
+      const p = await fetchAllProducts(storeId);
+      setMenuProducts(p);
       setMenuProductsLoaded(true);
-      
-      // Cache the products
-      sessionStorage.setItem('cachedMenuProducts', JSON.stringify(products));
-      sessionStorage.setItem('cachedMenuProductsTimestamp', now.toString());
-      console.log('Loaded menu products from database and cached');
-      return products;
-    } catch (error) {
-      console.error('Error loading menu products:', error);
-      return {};
+      setMenuProductsStoreId(storeId);
+      sessionStorage.setItem(cacheKey, JSON.stringify(p));
+      sessionStorage.setItem(tsKey, Date.now().toString());
+      return p;
+    } catch (e) {
+      console.error(e); return {};
     } finally {
       setMenuProductsLoading(false);
     }
   };
 
   const getChatParticipants = async () => {
-    const uniqueParticipants = new Map();
-    
-    // First, collect unique phone numbers from messages
-    messages.forEach(message => {
-      if (message.phoneNumber && message.phoneNumber !== user?.phoneNumber) {
-        if (!uniqueParticipants.has(message.phoneNumber)) {
-          uniqueParticipants.set(message.phoneNumber, {
-            id: message.phoneNumber,
-            phoneNumber: message.phoneNumber,
-            name: message.name || 'Unknown User'
-          });
-        }
+    const map = new Map();
+    messages.forEach(m => {
+      if (m.phoneNumber && m.phoneNumber !== user?.phoneNumber && !map.has(m.phoneNumber)) {
+        map.set(m.phoneNumber, { id: m.phoneNumber, phoneNumber: m.phoneNumber, name: m.name || 'Unknown' });
       }
     });
-    
-    // Try to fetch actual profile data for each participant
-    const participantsWithProfiles = [];
-    for (const [phoneNumber, participant] of uniqueParticipants) {
+    const result = [];
+    for (const [phone, p] of map) {
       try {
-        const userDoc = await getDoc(doc(db, 'users', phoneNumber));
-        if (userDoc.exists()) {
-          const profileData = userDoc.data();
-          participantsWithProfiles.push({
-            ...participant,
-            name: profileData.name || participant.name,
-            photoURL: profileData.photoURL
-          });
-        } else {
-          participantsWithProfiles.push(participant);
-        }
-      } catch (error) {
-        console.error("Error fetching profile for:", phoneNumber, error);
-        participantsWithProfiles.push(participant);
-      }
+        const d = await getDoc(doc(db, 'users', phone));
+        result.push(d.exists() ? { ...p, name: d.data().name || p.name, photoURL: d.data().photoURL } : p);
+      } catch (_) { result.push(p); }
     }
-    
-    return participantsWithProfiles;
+    return result;
   };
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setCurrentPage(tab);
-    
-    // Reset unread count when switching to chat page
-    if (tab === 'chat') {
-      setUnreadMessageCount(0);
-    }
+    if (tab === 'chat') setUnreadMessageCount(0);
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'menu':
-        return <Menu 
-          user={user} 
-          onLogout={handleLogout} 
-          wishlist={wishlist}
-          addToWishlist={addToWishlist}
-          removeFromWishlist={removeFromWishlist}
-          isInWishlist={isInWishlist}
-          addToCart={addToCart}
-          addGiftToCart={addGiftToCart}
-          getChatParticipants={getChatParticipants}
-          menuProducts={menuProducts}
-          menuProductsLoaded={menuProductsLoaded}
-          menuProductsLoading={menuProductsLoading}
-          loadMenuProducts={loadMenuProducts}
-        />;
-      case 'chat':
-        return <ChatRoom user={user} messages={messages} loading={messagesLoading} typingUsers={typingUsers} onLogout={handleLogout} />;
-      case 'wishlist':
-        return <Wishlist 
-          user={user} 
-          onLogout={handleLogout} 
-          wishlist={wishlist}
-          removeFromWishlist={removeFromWishlist}
-          isInWishlist={isInWishlist}
-        />;
-      case 'cart':
-        return <Cart 
-          user={user} 
-          onLogout={handleLogout} 
-          cart={cart}
-          removeFromCart={removeFromCart}
-          updateCartQuantity={updateCartQuantity}
-          clearCart={clearCart}
-          addToCart={addToCart}
-        />;
-      default:
-        return <ChatRoom user={user} messages={messages} loading={messagesLoading} typingUsers={typingUsers} onLogout={handleLogout} />;
-    }
-  };
+  if (loading) return (
+    <div className="app-loading">
+      <div className="loading-spinner" />
+      <p>Loading...</p>
+    </div>
+  );
 
-  if (loading) {
-    return (
-      <div className="app-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
-  }
+  const sharedProps = {
+    user, onLogout: handleLogout,
+    wishlist, addToWishlist, removeFromWishlist, isInWishlist,
+    addToCart, addGiftToCart, getChatParticipants,
+    menuProducts, menuProductsLoaded, menuProductsLoading, loadMenuProducts,
+    cart, removeFromCart, updateCartQuantity, clearCart,
+    messages, messagesLoading, typingUsers, unreadMessageCount,
+    handleTabChange, activeTab, getCartItemCount
+  };
 
   return (
     <Router>
       <div className="App">
-        <NotificationSystem />
-        {user ? (
-          <Routes>
-            {/* Admin Route - Completely separate from customer interface */}
-            <Route 
-              path="/admin" 
-              element={<AdminPanel />} 
-            />
-            
-            {/* Table Selector Route */}
-            <Route 
-              path="/" 
-              element={<TableSelector />} 
-            />
-            
-            {/* Table-specific Routes */}
-            <Route 
-              path="/table1" 
-              element={
-                <Table 
-                  user={user}
-                  tableNumber="1"
-                  onLogout={handleLogout}
-                  wishlist={wishlist}
-                  addToWishlist={addToWishlist}
-                  removeFromWishlist={removeFromWishlist}
-                  isInWishlist={isInWishlist}
-                  addToCart={addToCart}
-                  addGiftToCart={addGiftToCart}
-                  getChatParticipants={getChatParticipants}
-                  menuProducts={menuProducts}
-                  menuProductsLoaded={menuProductsLoaded}
-                  menuProductsLoading={menuProductsLoading}
-                  loadMenuProducts={loadMenuProducts}
-                  cart={cart}
-                  removeFromCart={removeFromCart}
-                  updateCartQuantity={updateCartQuantity}
-                  clearCart={clearCart}
-                  messages={messages}
-                  messagesLoading={messagesLoading}
-                  typingUsers={typingUsers}
-                  unreadMessageCount={unreadMessageCount}
-                  handleTabChange={handleTabChange}
-                  activeTab={activeTab}
-                />
-              } 
-            />
-            
-            <Route 
-              path="/table2" 
-              element={
-                <Table 
-                  user={user}
-                  tableNumber="2"
-                  onLogout={handleLogout}
-                  wishlist={wishlist}
-                  addToWishlist={addToWishlist}
-                  removeFromWishlist={removeFromWishlist}
-                  isInWishlist={isInWishlist}
-                  addToCart={addToCart}
-                  addGiftToCart={addGiftToCart}
-                  getChatParticipants={getChatParticipants}
-                  menuProducts={menuProducts}
-                  menuProductsLoaded={menuProductsLoaded}
-                  menuProductsLoading={menuProductsLoading}
-                  loadMenuProducts={loadMenuProducts}
-                  cart={cart}
-                  removeFromCart={removeFromCart}
-                  updateCartQuantity={updateCartQuantity}
-                  clearCart={clearCart}
-                  messages={messages}
-                  messagesLoading={messagesLoading}
-                  typingUsers={typingUsers}
-                  unreadMessageCount={unreadMessageCount}
-                  handleTabChange={handleTabChange}
-                  activeTab={activeTab}
-                />
-              } 
-            />
-            
-            {/* Default Customer Route - Main app interface */}
-            <Route 
-              path="/*" 
-              element={
-                <>
-                  {/* <Navbar user={user} onLogout={handleLogout} /> */}
-                  <main className="main-content">
-                    {renderContent()}
-                  </main>
-                  <BottomNav 
-                    activeTab={activeTab} 
-                    onTabChange={handleTabChange} 
-                    typingUsers={typingUsers}
-                    wishlistCount={wishlist.length}
-                    unreadMessageCount={unreadMessageCount}
-                    cartCount={getCartItemCount()}
-                  />
-                </>
-              } 
-            />
-          </Routes>
-        ) : (
-          <Login onLoginSuccess={handleLoginSuccess} />
-        )}
+        <AppRoutes
+          handleLoginSuccess={handleLoginSuccess}
+          handleLogout={handleLogout}
+          user={user}
+          {...sharedProps}
+        />
       </div>
     </Router>
   );
 }
 
-export default App; 
+export default App;

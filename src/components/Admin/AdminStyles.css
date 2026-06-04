@@ -9,10 +9,14 @@
 .admin-header {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 15px;
-  padding: 2rem;
+  padding: 1.5rem 2rem;
   margin-bottom: 2rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .admin-header h1 {
@@ -712,6 +716,36 @@
 @keyframes admin-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Form row (two columns) */
+.admin-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.admin-form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #2c3e50;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.admin-form-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Store settings */
+.admin-store-settings { max-width: 600px; }
+
+.admin-settings-form .admin-form-group {
+  margin-bottom: 18px;
 }
 
 /* Responsive Design */

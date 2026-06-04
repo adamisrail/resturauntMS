@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, getDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 // Cache for storing fetched data
@@ -46,7 +46,8 @@ const setCachedData = (cacheKey, data, subKey = null) => {
   } else {
     cache[cacheKey] = {
       data,
-      timestamp: now
+      timestamp: now,
+      ttl: cache[cacheKey]?.ttl
     };
   }
 };
