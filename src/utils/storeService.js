@@ -37,8 +37,39 @@ export const createStaffAccount = async ({ phoneNumber, email, password, name, s
   });
 };
 
+// Get all stores a user has access to (used after login for store selector)
+export const getStoresForUser = async (phoneOrUid) => {
+  const results = [];
+  try {
+    // Check staffAccounts for phone-based accounts
+    const accountSnap = await getDoc(doc(db, 'staffAccounts', phoneOrUid));
+    if (accountSnap.exists()) {
+      const data = accountSnap.data();
+      if (data.storeId) {
+        const storeSnap = await getDoc(doc(db, 'stores', data.storeId));
+        if (storeSnap.exists()) {
+          results.push({ id: storeSnap.id, ...storeSnap.data(), myRole: data.role });
+        }
+      }
+    }
+    // Also check all stores' staff subcollections (handles Firebase Auth owners)
+    if (results.length === 0) {
+      const storesSnap = await getDocs(collection(db, 'stores'));
+      for (const storeDoc of storesSnap.docs) {
+        const staffSnap = await getDoc(doc(db, 'stores', storeDoc.id, 'staff', phoneOrUid));
+        if (staffSnap.exists()) {
+          results.push({ id: storeDoc.id, ...storeDoc.data(), myRole: staffSnap.data().role });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('getStoresForUser error:', err);
+  }
+  return results;
+};
+
 // Verify staff login — accepts email or phone + password
-// Returns { storeSlug, storeId, role, name, phoneNumber } or null
+// Returns { storeSlug, storeId, role, name, phoneNumber, uid } or null
 export const verifyStaffLogin = async (identifier, password) => {
   const input = identifier.trim();
 
@@ -110,6 +141,16 @@ export const getStaffAccount = async (phoneNumber) => {
   const phone = phoneNumber.replace(/[^0-9+]/g, '');
   const snap = await getDoc(doc(db, 'staffAccounts', phone));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+};
+
+// Change staff password — verifies current password first
+export const changeStaffPassword = async (phoneNumber, currentPassword, newPassword) => {
+  const phone = phoneNumber.replace(/[^0-9+]/g, '');
+  const snap = await getDoc(doc(db, 'staffAccounts', phone));
+  if (!snap.exists()) throw new Error('Account not found.');
+  if (snap.data().password !== currentPassword) throw new Error('Current password is incorrect.');
+  if (!newPassword || newPassword.length < 4) throw new Error('New password must be at least 4 characters.');
+  await updateDoc(doc(db, 'staffAccounts', phone), { password: newPassword });
 };
 
 // ─── Store CRUD ──────────────────────────────────────────────────────────────

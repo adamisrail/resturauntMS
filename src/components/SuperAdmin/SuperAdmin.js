@@ -228,6 +228,7 @@ const CreateStoreModal = ({ onClose, onCreated }) => {
         ownerId: firebaseUser.uid,
         ownerEmail: form.email.trim(),
         plan: 'free',
+        tableCount: 10,
       });
 
       // 3. Register as owner in staff subcollection
