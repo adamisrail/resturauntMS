@@ -88,7 +88,7 @@ const Table = ({
       unsub();
       deleteDoc(myDocRef).catch(console.error);
     };
-  }, [user?.phoneNumber, tableNumber, storeId]);
+  }, [user?.phoneNumber, user?.name, user?.displayName, tableNumber, storeId]);
 
   // ── Sync own wishlist to Firestore ─────────────────────────────────────────
   useEffect(() => {
@@ -102,7 +102,7 @@ const Table = ({
         items: wishlist,
       }
     }, { merge: true }).catch(console.error);
-  }, [wishlist, user?.phoneNumber, tableNumber, storeId]);
+  }, [wishlist, user?.phoneNumber, user?.name, user?.displayName, tableNumber, storeId]);
 
   // ── Subscribe to all table wishlists ───────────────────────────────────────
   useEffect(() => {
@@ -125,7 +125,7 @@ const Table = ({
         items: cart,
       }
     }, { merge: true }).catch(console.error);
-  }, [cart, user?.phoneNumber, tableNumber, storeId]);
+  }, [cart, user?.phoneNumber, user?.name, user?.displayName, tableNumber, storeId]);
 
   // ── Subscribe to all table carts ───────────────────────────────────────────
   useEffect(() => {

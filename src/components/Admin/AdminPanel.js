@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { collection, updateDoc, doc, onSnapshot, orderBy, query, serverTimestamp, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, updateDoc, doc, onSnapshot, orderBy, query, serverTimestamp, getDocs, writeBatch } from 'firebase/firestore';
 import { db, storage } from '../../firebase/config';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getCacheStats, clearCache } from '../../utils/firebaseOptimizer';
