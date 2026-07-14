@@ -8,7 +8,9 @@ import Profile from '../Navigation/Profile';
 import './Pages.css';
 import './Cart.css';
 
-const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearCart, addToCart }) => {
+const phoneKey = (phone) => (phone || '').replace(/[^a-z0-9]/gi, '');
+
+const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearCart, addToCart, tableCarts = {} }) => {
   const { store } = useStore();
   const { tableNumber: urlTableNumber } = useParams();
   const storeId = store?.id || null;
@@ -271,6 +273,47 @@ const Cart = ({ user, onLogout, cart, removeFromCart, updateCartQuantity, clearC
 
           </div>
         )}
+
+        {/* ── Table Members' Carts ───────────────────────── */}
+        {(() => {
+          const myKey = phoneKey(user?.phoneNumber);
+          const others = Object.entries(tableCarts).filter(
+            ([key, data]) => key !== myKey && data?.phoneNumber && (data.items || []).length > 0
+          );
+          if (others.length === 0) return null;
+          return (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ color: '#8696a0', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, paddingLeft: 4 }}>
+                🍽️ Table Orders
+              </div>
+              {others.map(([key, data]) => (
+                <div key={key} style={{ background: '#182229', border: '1px solid #2a3942', borderRadius: 16, marginBottom: 12, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid #2a3942', color: '#e9edef', fontWeight: 600, fontSize: 14 }}>
+                    {data.name}'s Cart
+                    <span style={{ color: '#8696a0', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+                      ({(data.items || []).length} item{data.items?.length !== 1 ? 's' : ''})
+                    </span>
+                  </div>
+                  {(data.items || []).map((item) => (
+                    <div key={item.giftId || item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid #1a2730' }}>
+                      <img src={item.image} alt={item.name} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#e9edef', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {item.name}
+                          {item.isGift && <span style={{ fontSize: 11, marginLeft: 6 }}>🎁</span>}
+                        </div>
+                        <div style={{ color: '#8696a0', fontSize: 12 }}>x{item.quantity}</div>
+                      </div>
+                      <div style={{ color: '#25D366', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+                        {item.isGift && !item.isGiftSent ? 'FREE' : `$${(item.price * item.quantity).toFixed(2)}`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Bottom Calculation Section */}
         {cart.length > 0 && (

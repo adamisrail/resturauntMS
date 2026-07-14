@@ -43,10 +43,23 @@
   white-space: nowrap;
 }
 
-.admin-logout-btn:hover {
-  background: #dc2626;
-  color: white;
+.admin-logout-btn:hover { background: #dc2626; color: white; }
+
+.admin-change-pw-btn {
+  padding: 8px 18px;
+  background: white;
+  color: #374151;
+  border: 1.5px solid #dee2e6;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
+
+.admin-change-pw-btn:hover { background: #f8f9fa; border-color: #6b7280; }
 
 .admin-header-logo {
   width: 52px;

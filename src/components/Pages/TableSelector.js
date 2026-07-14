@@ -27,7 +27,7 @@ const TableSelector = () => {
     );
   }
 
-  const tableCount = store?.tableCount || 2;
+  const tableCount = store?.tableCount || 10;
   const tables = Array.from({ length: tableCount }, (_, i) => i + 1);
 
   return (

@@ -37,3 +37,7 @@ ui-debug.log
 # OS
 Thumbs.db 
 .vercel
+
+# Local sensitive files — never commit
+Passwords.txt
+.claude/settings.local.json

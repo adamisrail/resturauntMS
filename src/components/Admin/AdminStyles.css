@@ -748,6 +748,95 @@
   margin-bottom: 18px;
 }
 
+/* Online Orders */
+.online-orders-list { display: flex; flex-direction: column; gap: 14px; }
+
+.online-order-card {
+  background: white;
+  border: 1px solid #e8ecef;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.online-order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.online-order-customer strong { display: block; font-size: 15px; color: #1a1a2e; }
+.online-order-phone { font-size: 12px; color: #6b7280; }
+
+.online-order-meta { display: flex; gap: 10px; align-items: center; }
+
+.online-order-type {
+  font-size: 12px;
+  font-weight: 600;
+  background: #f1f3f5;
+  padding: 4px 10px;
+  border-radius: 20px;
+  color: #374151;
+}
+
+.online-order-time { font-size: 12px; color: #9ca3af; }
+
+.online-order-address {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.online-order-notes {
+  font-size: 12px;
+  color: #6b7280;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+.online-order-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f3f5;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.online-order-total { font-size: 16px; color: #1a1a2e; }
+
+.online-order-actions { display: flex; align-items: center; gap: 10px; }
+
+.online-order-status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.online-order-status-select {
+  padding: 6px 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  font-family: 'Poppins', sans-serif;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .admin-header {

@@ -1,0 +1,216 @@
+.adminlogin-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #005c4b 0%, #0b141a 55%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.adminlogin-card {
+  background: white;
+  border-radius: 20px;
+  padding: 44px 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  text-align: center;
+}
+
+.adminlogin-picker-card { max-width: 520px; }
+
+.adminlogin-logo { font-size: 44px; margin-bottom: 12px; }
+
+.adminlogin-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin: 0 0 6px;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.adminlogin-sub { font-size: 14px; color: #6b7280; margin: 0 0 28px; }
+
+.adminlogin-form { text-align: left; }
+
+.adminlogin-group { margin-bottom: 18px; }
+
+.adminlogin-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.adminlogin-group input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: 'Poppins', sans-serif;
+  color: #1a1a2e;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.adminlogin-group input:focus { border-color: #25D366; }
+
+.adminlogin-pw-row { position: relative; }
+
+.adminlogin-pw-row input { padding-right: 44px; }
+
+.adminlogin-pw-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.adminlogin-error {
+  background: #fef2f2;
+  border-left: 4px solid #dc2626;
+  color: #dc2626;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.adminlogin-btn {
+  width: 100%;
+  padding: 13px;
+  background: #25D366;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: background 0.2s, transform 0.15s;
+  margin-bottom: 16px;
+}
+
+.adminlogin-btn:hover:not(:disabled) { background: #1fbd59; transform: translateY(-1px); }
+.adminlogin-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.adminlogin-note { font-size: 12px; color: #9ca3af; margin: 0; }
+
+.adminlogin-divider {
+  border: none;
+  border-top: 1px solid #f1f3f5;
+  margin: 20px 0;
+}
+
+.adminlogin-customer-link { font-size: 13px; color: #6b7280; margin: 0; }
+
+.adminlogin-customer-link a { color: #25D366; font-weight: 600; text-decoration: none; }
+.adminlogin-customer-link a:hover { text-decoration: underline; }
+
+.adminlogin-signup-prompt {
+  text-align: center;
+}
+
+.adminlogin-signup-prompt p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 8px;
+}
+
+.adminlogin-signup-link {
+  background: none;
+  border: none;
+  color: #25D366;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  padding: 0;
+  text-decoration: none;
+}
+
+.adminlogin-signup-link:hover { text-decoration: underline; }
+
+.adminlogin-slug-preview {
+  display: block;
+  font-size: 12px;
+  color: #25D366;
+  margin-top: 5px;
+  font-family: monospace;
+}
+
+/* Store picker */
+.adminlogin-store-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.adminlogin-store-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #f8f9fa;
+  border: 1.5px solid #e9ecef;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: all 0.2s;
+  width: 100%;
+  text-align: left;
+}
+
+.adminlogin-store-row:hover {
+  border-color: #25D366;
+  background: #f0faf5;
+}
+
+.adminlogin-store-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0d2318;
+  color: #25D366;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.adminlogin-store-logo img { width: 100%; height: 100%; object-fit: cover; }
+
+.adminlogin-store-info { flex: 1; min-width: 0; }
+.adminlogin-store-info strong { display: block; font-size: 14px; color: #1a1a2e; }
+.adminlogin-store-info small { font-size: 12px; color: #6b7280; }
+
+.adminlogin-role-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.adminlogin-store-arrow { font-size: 18px; color: #25D366; flex-shrink: 0; }
+
+@media (max-width: 480px) {
+  .adminlogin-card { padding: 32px 24px; }
+  .adminlogin-title { font-size: 22px; }
+}

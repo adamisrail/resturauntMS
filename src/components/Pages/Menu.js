@@ -6,10 +6,10 @@ import Profile from '../Navigation/Profile';
 import './Pages.css';
 import './Menu.css';
 
-const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isInWishlist, addToCart, addGiftToCart, getChatParticipants, menuProducts, menuProductsLoaded, menuProductsLoading, loadMenuProducts }) => {
-  // Get the current store so we load only this store's products
+const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isInWishlist, addToCart, addGiftToCart, tableParticipants = [], tableNumber, storeId, menuProducts, menuProductsLoaded, menuProductsLoading, loadMenuProducts }) => {
+  // Get the current store context (store object used for product loading)
   const { store } = useStore();
-  const storeId = store?.id || null;
+  const resolvedStoreId = storeId || store?.id || null;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('main-course');
@@ -24,7 +24,6 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
   const [clickedImages, setClickedImages] = useState({});
   const [sendDropdownOpen, setSendDropdownOpen] = useState({});
   const [giftDropdownOpen, setGiftDropdownOpen] = useState({});
-  const [chatParticipants, setChatParticipants] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const menuItems = menuProducts;
   const loading = menuProductsLoading;
@@ -48,11 +47,11 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
     { value: 'reviews', label: 'Reviews' }
   ];
 
-  // Load this store's products. Re-runs whenever storeId changes (user navigates to a different store).
+  // Load this store's products. Re-runs whenever resolvedStoreId changes.
   useEffect(() => {
-    loadMenuProducts(storeId);
+    loadMenuProducts(resolvedStoreId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
+  }, [resolvedStoreId]);
 
   const scrollToCategory = (categoryId) => {
     setActiveCategory(categoryId);
@@ -152,22 +151,6 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
     }));
   };
 
-  // Get chat participants dynamically from messages
-  useEffect(() => {
-    const fetchParticipants = async () => {
-      if (getChatParticipants) {
-        try {
-          const participants = await getChatParticipants();
-          setChatParticipants(participants);
-        } catch (error) {
-          console.error("Error fetching chat participants:", error);
-        }
-      }
-    };
-
-    fetchParticipants();
-  }, [getChatParticipants]);
-
   // Fetch user profile for message sender name
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -248,14 +231,13 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
     }));
 
     try {
-      // Generate chat message
-      const messageText = `💡 ${userProfile?.name || user.displayName || 'You'} recommended "${item.name}" ($${item.price}) to ${participant.name}`;
-      
-      // Add message to Firestore
-      await addDoc(collection(db, "messages"), {
+      const senderName = userProfile?.name || user.displayName || 'You';
+      const messageText = `💡 ${senderName} recommended "${item.name}" ($${item.price}) to ${participant.name}`;
+      const collectionName = tableNumber ? `messages-table-${tableNumber}` : 'messages';
+      await addDoc(collection(db, collectionName), {
         text: messageText,
         phoneNumber: user.phoneNumber,
-        name: userProfile?.name || user.displayName || 'You',
+        name: senderName,
         timestamp: serverTimestamp(),
         type: 'recommendation',
         recommendedItem: item.name,
@@ -294,14 +276,12 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
 
       // Only proceed with chat message and success notification if gift was actually added
       if (giftAdded) {
-        // Generate chat message with sender name
         const messageText = `🎁 ${senderName} gifted "${item.name}" ($${item.price}) to ${participant.name}`;
-        
-        // Add message to Firestore
-        await addDoc(collection(db, "messages"), {
+        const collectionName = tableNumber ? `messages-table-${tableNumber}` : 'messages';
+        await addDoc(collection(db, collectionName), {
           text: messageText,
           phoneNumber: user.phoneNumber,
-          name: userProfile?.name || user.displayName || 'You',
+          name: senderName,
           timestamp: serverTimestamp(),
           type: 'gift',
           giftedItem: item.name,
@@ -720,9 +700,9 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                                       <span>Gift to:</span>
                                     </div>
                                     <div className="participants-list">
-                                      {chatParticipants.map((participant) => (
+                                      {tableParticipants.map((participant) => (
                                                                                  <button
-                                           key={participant.id}
+                                           key={participant.phoneNumber}
                                            className="participant-item"
                                            onClick={(e) => {
                                              e.stopPropagation();
@@ -766,9 +746,9 @@ const Menu = ({ user, onLogout, wishlist, addToWishlist, removeFromWishlist, isI
                                        <span>Recommend to:</span>
                                      </div>
                                     <div className="participants-list">
-                                      {chatParticipants.map((participant) => (
+                                      {tableParticipants.map((participant) => (
                                                                                  <button
-                                           key={participant.id}
+                                           key={participant.phoneNumber}
                                            className="participant-item"
                                            onClick={(e) => {
                                              e.stopPropagation();

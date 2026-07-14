@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { collection, getDocs, updateDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { collection, updateDoc, doc, onSnapshot, orderBy, query, serverTimestamp, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, storage } from '../../firebase/config';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getCacheStats, clearCache } from '../../utils/firebaseOptimizer';
 import { fetchAllProductsFlat, addProduct, updateProduct, deleteProduct, initializeDefaultProducts } from '../../utils/productService';
-import { updateStore, getStoreStaff, removeStaffMember, updateStaffRole, createStaffAccount } from '../../utils/storeService';
+import { updateStore, getStoreStaff, removeStaffMember, updateStaffRole, createStaffAccount, changeStaffPassword } from '../../utils/storeService';
 import { useStore as useStoreCtx } from '../../contexts/StoreContext';
 import { useStore } from '../../contexts/StoreContext';
 import useStoreRole from '../../hooks/useStoreRole';
@@ -19,9 +19,10 @@ const AdminPanel = ({ user, onLogout }) => {
   const { role, loading: roleLoading, can, hasAccess } = useStoreRole(user);
 
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showChangePw, setShowChangePw] = useState(false);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -34,12 +35,12 @@ const AdminPanel = ({ user, onLogout }) => {
     if (!storeId) return;
     setDataLoading(true);
     try {
-      const [prods, usersSnap] = await Promise.all([
+      const [prods, staffList] = await Promise.all([
         fetchAllProductsFlat(storeId),
-        getDocs(collection(db, 'users')).catch(() => null),
+        getStoreStaff(storeId).catch(() => []),
       ]);
       setProducts(prods);
-      if (usersSnap) setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setStaff(staffList);
     } finally {
       setDataLoading(false);
     }
@@ -62,6 +63,20 @@ const AdminPanel = ({ user, onLogout }) => {
       <h2>Access Denied</h2>
       <p>You don't have a staff role for <strong>{store?.name}</strong>.</p>
       <p className="admin-no-access-sub">Ask the store owner to invite you.</p>
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => { window.location.href = '/admin'; }}
+          style={{ padding: '10px 20px', background: '#25D366', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Switch Account
+        </button>
+        <button
+          onClick={onLogout}
+          style={{ padding: '10px 20px', background: '#2a3942', color: '#e9edef', border: '1px solid #3d5263', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Logout
+        </button>
+      </div>
     </div>
   );
 
@@ -99,17 +114,36 @@ const AdminPanel = ({ user, onLogout }) => {
     await Promise.all(tableOrders.map(o =>
       updateDoc(doc(db, ...(storeId ? ['stores', storeId, 'orders', o.id] : ['orders', o.id])), { status, updatedAt: serverTimestamp() })
     ));
+
+    // When a table is cleared, also wipe presence, wishlists, and carts
+    // so the next group of customers starts fresh
+    if (status === 'completed' && storeId) {
+      const rawNum = tableNumber.replace(/^Table\s+/i, '').trim();
+      const tableKey = `${storeId}_table-${rawNum}`;
+      try {
+        const batch = writeBatch(db);
+        // Delete all participant presence docs
+        const presenceSnap = await getDocs(collection(db, 'tablePresence', tableKey, 'participants'));
+        presenceSnap.forEach(d => batch.delete(d.ref));
+        // Delete shared wishlist and cart docs
+        batch.delete(doc(db, 'tableWishlists', tableKey));
+        batch.delete(doc(db, 'tableCarts', tableKey));
+        await batch.commit();
+      } catch (_) { /* ignore if docs don't exist */ }
+    }
+
     notify(`Table ${tableNumber} ${status === 'ready' ? 'marked ready' : 'cleared'}.`, 'success');
   };
 
   const notify = (msg, type) => window.addNotification?.(msg, type, 3000);
 
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard', perm: PERM.VIEW_DASHBOARD },
-    { id: 'products',  label: 'Products',  perm: PERM.VIEW_PRODUCTS },
-    { id: 'orders',    label: 'Orders',    perm: PERM.VIEW_ORDERS },
-    { id: 'staff',     label: 'Staff',     perm: PERM.VIEW_STAFF },
-    { id: 'settings',  label: 'Settings',  perm: PERM.EDIT_SETTINGS },
+    { id: 'dashboard',     label: 'Dashboard',      perm: PERM.VIEW_DASHBOARD },
+    { id: 'products',      label: 'Products',        perm: PERM.VIEW_PRODUCTS },
+    { id: 'orders',        label: 'Dine-In Orders',  perm: PERM.VIEW_ORDERS },
+    { id: 'online-orders', label: 'Online Orders',   perm: PERM.VIEW_ORDERS },
+    { id: 'staff',         label: 'Staff',           perm: PERM.VIEW_STAFF },
+    { id: 'settings',      label: 'Settings',        perm: PERM.EDIT_SETTINGS },
   ].filter(t => can(t.perm));
 
   if (dataLoading) return <div className="admin-loading"><div className="admin-loading-spinner" /><p>Loading...</p></div>;
@@ -138,14 +172,25 @@ const AdminPanel = ({ user, onLogout }) => {
                 localStorage.removeItem('currentUser');
                 localStorage.removeItem('lastActiveTab');
                 if (onLogout) onLogout();
-                window.location.href = '/login';
+                window.location.href = '/admin';
               }
             }}
           >
             Log Out
           </button>
+          <button className="admin-change-pw-btn" onClick={() => setShowChangePw(true)}>
+            🔑 Change Password
+          </button>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      {showChangePw && (
+        <ChangePasswordModal
+          user={user}
+          onClose={() => setShowChangePw(false)}
+        />
+      )}
 
       <div className="admin-navigation">
         {tabs.map(t => (
@@ -156,7 +201,7 @@ const AdminPanel = ({ user, onLogout }) => {
       </div>
 
       <div className="admin-content">
-        {activeTab === 'dashboard' && <DashboardTab products={products} orders={orders} users={users} can={can} />}
+        {activeTab === 'dashboard' && <DashboardTab products={products} orders={orders} staff={staff} can={can} />}
         {activeTab === 'products' && (
           <ProductsTab
             products={products}
@@ -172,7 +217,8 @@ const AdminPanel = ({ user, onLogout }) => {
             onSeed={handleSeedProducts}
           />
         )}
-        {activeTab === 'orders' && <OrdersTab orders={orders} can={can} storeId={storeId} onSetStatus={setOrderStatus} />}
+        {activeTab === 'orders' && <OrdersTab orders={orders.filter(o => o.orderType !== 'online')} can={can} storeId={storeId} onSetStatus={setOrderStatus} title="Dine-In Orders" />}
+        {activeTab === 'online-orders' && <OnlineOrdersTab orders={orders.filter(o => o.orderType === 'online')} can={can} storeId={storeId} onSetStatus={setOrderStatus} />}
         {activeTab === 'staff' && <StaffTab storeId={storeId} user={user} role={role} can={can} />}
         {activeTab === 'settings' && (
           <StoreSettingsTab store={store} onSave={async (data) => {
@@ -187,19 +233,22 @@ const AdminPanel = ({ user, onLogout }) => {
 };
 
 // ─── Dashboard Tab ───────────────────────────────────────────────────────────
-const DashboardTab = ({ products, orders, users, can }) => (
+const DashboardTab = ({ products, orders, staff, can }) => {
+  const uniqueCustomers = new Set(orders.map(o => o.customerPhone).filter(Boolean)).size;
+  const onlineOrders  = orders.filter(o => o.orderType === 'online').length;
+  const dineInOrders  = orders.filter(o => o.orderType !== 'online').length;
+  const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
+  return (
   <div className="admin-dashboard">
     <h2>Dashboard</h2>
     <div className="admin-dashboard-stats">
       <div className="admin-stat-card"><h3>Products</h3><p>{products.length}</p></div>
-      <div className="admin-stat-card"><h3>Orders</h3><p>{orders.length}</p></div>
-      {can(PERM.VIEW_ANALYTICS) && <div className="admin-stat-card"><h3>Users</h3><p>{users.length}</p></div>}
-      {can(PERM.VIEW_ANALYTICS) && (
-        <div className="admin-stat-card">
-          <h3>Revenue</h3>
-          <p>${orders.reduce((s, o) => s + (o.total || 0), 0).toFixed(2)}</p>
-        </div>
-      )}
+      <div className="admin-stat-card"><h3>Total Orders</h3><p>{orders.length}</p></div>
+      {can(PERM.VIEW_ANALYTICS) && <div className="admin-stat-card"><h3>Dine-In</h3><p>{dineInOrders}</p></div>}
+      {can(PERM.VIEW_ANALYTICS) && <div className="admin-stat-card"><h3>Online</h3><p>{onlineOrders}</p></div>}
+      {can(PERM.VIEW_ANALYTICS) && <div className="admin-stat-card"><h3>Customers</h3><p>{uniqueCustomers}</p></div>}
+      {can(PERM.VIEW_ANALYTICS) && <div className="admin-stat-card"><h3>Staff</h3><p>{staff.length}</p></div>}
+      {can(PERM.VIEW_ANALYTICS) && <div className="admin-stat-card"><h3>Revenue</h3><p>${revenue.toFixed(2)}</p></div>}
     </div>
     {can(PERM.VIEW_ANALYTICS) && (
       <div className="admin-dashboard-actions">
@@ -210,7 +259,8 @@ const DashboardTab = ({ products, orders, users, can }) => (
       </div>
     )}
   </div>
-);
+  );
+};
 
 // ─── Products Tab ─────────────────────────────────────────────────────────────
 const ProductsTab = ({ products, can, storeId, showAddProduct, setShowAddProduct, selectedProduct, setSelectedProduct, onAdd, onUpdate, onDelete, onSeed }) => (
@@ -342,11 +392,108 @@ const OrdersTab = ({ orders, can, onSetStatus }) => {
   );
 };
 
-// ─── Staff Tab ────────────────────────────────────────────────────────────────
-const generateStaffPassword = () => {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+// ─── Online Orders Tab ────────────────────────────────────────────────────────
+const OnlineOrdersTab = ({ orders, can, storeId, onSetStatus }) => {
+  const statusColor = { pending: '#f59e0b', ready: '#25D366', completed: '#8696a0', cancelled: '#ff6b6b' };
+
+  const updateStatus = async (orderId, status) => {
+    const { doc, updateDoc } = await import('firebase/firestore');
+    const { db: firestore } = await import('../../firebase/config');
+    const path = storeId ? ['stores', storeId, 'orders', orderId] : ['orders', orderId];
+    await updateDoc(doc(firestore, ...path), { status, updatedAt: new Date() });
+    window.addNotification?.('Order status updated.', 'success', 2000);
+  };
+
+  return (
+    <div className="admin-orders">
+      <div className="admin-orders-header">
+        <h2>Online Orders</h2>
+        <div className="admin-orders-summary">
+          <span className="admin-total-orders">Total: {orders.length}</span>
+          <span className="admin-total-tables" style={{ color: '#f59e0b' }}>
+            Pending: {orders.filter(o => o.status === 'pending').length}
+          </span>
+        </div>
+      </div>
+
+      {orders.length === 0 ? (
+        <div className="admin-no-tables">
+          <p>No online orders yet</p>
+          <p className="admin-no-tables-subtitle">Orders placed via the online ordering page will appear here</p>
+        </div>
+      ) : (
+        <div className="online-orders-list">
+          {orders.map(order => (
+            <div key={order.id} className="online-order-card">
+              <div className="online-order-header">
+                <div className="online-order-customer">
+                  <strong>{order.customerName}</strong>
+                  <span className="online-order-phone">{order.customerPhone}</span>
+                </div>
+                <div className="online-order-meta">
+                  <span className="online-order-type">
+                    {order.deliveryType === 'delivery' ? '🚚 Delivery' : '🏃 Pickup'}
+                  </span>
+                  <span className="online-order-time">
+                    {order.createdAt?.toDate ? new Date(order.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {order.deliveryAddress && (
+                <div className="online-order-address">
+                  📍 {order.deliveryAddress}
+                </div>
+              )}
+
+              <div className="admin-order-items">
+                {order.items?.map((item, i) => (
+                  <div key={i} className="admin-order-item">
+                    <span className="admin-item-quantity">{item.quantity}x</span>
+                    <span className="admin-item-name">{item.name}</span>
+                    <span className="admin-item-price">${item.price}</span>
+                  </div>
+                ))}
+              </div>
+
+              {order.specialInstructions && (
+                <div className="online-order-notes">💬 {order.specialInstructions}</div>
+              )}
+
+              <div className="online-order-footer">
+                <strong className="online-order-total">${order.total?.toFixed(2)}</strong>
+                <div className="online-order-actions">
+                  <span
+                    className="online-order-status"
+                    style={{ background: (statusColor[order.status] || '#8696a0') + '22', color: statusColor[order.status] || '#8696a0' }}
+                  >
+                    {order.status || 'pending'}
+                  </span>
+                  {can(PERM.MANAGE_ORDERS) && order.status !== 'completed' && (
+                    <select
+                      className="online-order-status-select"
+                      value={order.status || 'pending'}
+                      onChange={e => updateStatus(order.id, e.target.value)}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="preparing">Preparing</option>
+                      <option value="ready">Ready</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
+
+// ─── Staff Tab ────────────────────────────────────────────────────────────────
+const generateStaffPassword = () => '1234';
 
 const StaffTab = ({ storeId, user, role, can }) => {
   const { store } = useStoreCtx();
@@ -553,7 +700,7 @@ const StoreSettingsTab = ({ store, onSave }) => {
     name: store?.name || '',
     description: store?.description || '',
     logo: store?.logo || '',
-    tableCount: store?.tableCount || 2,
+    tableCount: store?.tableCount || 10,
     primaryColor: store?.theme?.primaryColor || '#25D366',
     accentColor: store?.theme?.accentColor || '#005c4b',
   });
@@ -799,6 +946,115 @@ const ProductForm = ({ title, submitLabel, initial = {}, onSubmit, onCancel, sto
             <button type="button" className="admin-cancel-btn" onClick={onCancel}>Cancel</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+// ─── Change Password Modal ────────────────────────────────────────────────────
+const ChangePasswordModal = ({ user, onClose }) => {
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (newPw !== confirmPw) { setError('New passwords do not match.'); return; }
+    if (newPw.length < 4) { setError('New password must be at least 4 characters.'); return; }
+    setSaving(true);
+    try {
+      await changeStaffPassword(user.phoneNumber, currentPw, newPw);
+      setSuccess(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="admin-form-overlay">
+      <div className="admin-form-modal" style={{ maxWidth: 420 }}>
+        <div className="admin-form-modal-header">
+          <h3>🔑 Change Password</h3>
+          <button className="admin-form-close" onClick={onClose}>✕</button>
+        </div>
+
+        {success ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+            <p style={{ color: '#2c3e50', fontWeight: 600, marginBottom: 6 }}>Password updated successfully!</p>
+            <p style={{ color: '#7f8c8d', fontSize: 13, marginBottom: 20 }}>Use your new password next time you log in.</p>
+            <button className="admin-submit-btn" onClick={onClose}>Done</button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="admin-form-group">
+              <label>Current Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showCurrent ? 'text' : 'password'}
+                  value={currentPw}
+                  onChange={e => setCurrentPw(e.target.value)}
+                  placeholder="Enter current password"
+                  required
+                  autoFocus
+                  style={{ paddingRight: 40 }}
+                />
+                <button type="button" onClick={() => setShowCurrent(s => !s)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: '#7f8c8d' }}>
+                  {showCurrent ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
+
+            <div className="admin-form-group">
+              <label>New Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showNew ? 'text' : 'password'}
+                  value={newPw}
+                  onChange={e => setNewPw(e.target.value)}
+                  placeholder="At least 4 characters"
+                  required
+                  style={{ paddingRight: 40 }}
+                />
+                <button type="button" onClick={() => setShowNew(s => !s)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: '#7f8c8d' }}>
+                  {showNew ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
+
+            <div className="admin-form-group">
+              <label>Confirm New Password</label>
+              <input
+                type="password"
+                value={confirmPw}
+                onChange={e => setConfirmPw(e.target.value)}
+                placeholder="Re-enter new password"
+                required
+              />
+            </div>
+
+            {error && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 13, marginBottom: 14 }}>
+                {error}
+              </div>
+            )}
+
+            <div className="admin-form-actions">
+              <button type="submit" className="admin-submit-btn" disabled={saving}>
+                {saving ? 'Saving...' : 'Update Password'}
+              </button>
+              <button type="button" className="admin-cancel-btn" onClick={onClose}>Cancel</button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
